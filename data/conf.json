@@ -1,0 +1,43 @@
+{
+    "meta": [
+        {
+        "name":"FINNGEN",
+        "file":"/Users/mitja/projects/finngen/META_ANALYSIS/I9_AF.gz",
+        "n_cases": 6570 ,
+        "n_controls": 48378,
+        "chr":"CHR",
+        "pos":"POS",
+        "ref":"Allele1",
+        "alt":"Allele2",
+        "effect":"BETA",
+        "effect_type":"beta",
+        "pval":"p.value"
+        },
+        {
+        "name":"UKBB",
+        "file":"/Users/mitja/projects/finngen/META_ANALYSIS/I48.imputed_v3.results.both_sexes.tsv.gz.lifted.gz",
+        "n_cases": 6751,
+        "n_controls": 354443,
+        "chr":"achr38",
+        "pos":"apos38",
+        "ref":"REF",
+        "alt":"ALT",
+        "effect":"beta",
+        "effect_type":"beta",
+        "pval":"pval"
+        },
+        {
+        "name":"BBJ",
+        "file":"/Users/mitja/projects/finngen/META_ANALYSIS/AF_1000G_rsq09_FINAL.txt.gz.lifted.gz",
+        "n_cases": 8180 ,
+        "n_controls": 28612 ,
+        "chr":"achr38",
+        "pos":"apos38",
+        "ref":"A1",
+        "alt":"A2",
+        "effect":"OR",
+        "effect_type":"OR",
+        "pval":"PVALUE"
+        }
+    ]
+}
