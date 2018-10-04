@@ -11,7 +11,8 @@
         "alt":"Allele2",
         "effect":"BETA",
         "effect_type":"beta",
-        "pval":"p.value"
+        "pval":"p.value",
+        "se":"SE"
         },
         {
         "name":"UKBB",
@@ -24,7 +25,8 @@
         "alt":"ALT",
         "effect":"beta",
         "effect_type":"beta",
-        "pval":"pval"
+        "pval":"pval",
+        "se":"se"
         },
         {
         "name":"BBJ",
