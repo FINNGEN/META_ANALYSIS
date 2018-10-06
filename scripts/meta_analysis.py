@@ -31,7 +31,7 @@ def flip_strand( allele):
 
 class MetaDat:
 
-    def __init__(self, chr, pos, ref, alt, beta, pval, se=None):
+    def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
         self.pos = pos
         self.ref = ref
@@ -39,7 +39,7 @@ class MetaDat:
         self.beta = beta
         self.pval = pval
         self.se = float(se) if se is not None else None
-
+        self.extra_cols = extra_cols
     def __eq__(self, other):
 
         return self.chr == other.chr and self.pos == other.pos and self.ref == other.ref and self.alt == other.alt
@@ -109,7 +109,19 @@ class Study:
 
         for f in Study.OPTIONAL_FIELDS.keys():
             if f in self.conf:
+                 if self.conf[f] not in header:
+                     raise Exception("Configured column " + self.conf[f] + " not found in the study results " + self.conf["name"])
                  self.conf["h_idx"][f] = header.index(self.conf[f])
+
+        if "extra_cols" in self.conf:
+            for c in self.conf["extra_cols"]:
+                if c not in header:
+                    raise Exception("Configured column " + self.conf[f] + " not found in the study results " + self.conf["name"])
+                self.conf["h_idx"][c] = header.index(c)
+        else:
+             self.conf["extra_cols"] = []
+
+
 
     @property
     def n_cases(self):
@@ -161,7 +173,15 @@ class Study:
         if not chr.endswith("_alt") and not chr.endswith("_random"):
             chr = chrord[chr]
 
-        return MetaDat(chr,int(pos),ref,alt, eff, pval, se)
+
+        extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
+
+        return MetaDat(chr,int(pos),ref,alt, eff, pval, se, extracols)
+
+    @property
+    def extra_cols(self):
+        return self.conf["extra_cols"]
+
 
     def get_match(self, dat: MetaDat) -> MetaDat:
         """
@@ -190,8 +210,6 @@ class Study:
         self.future =metadat
 
 
-
-
 def get_studies(conf:str) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
@@ -202,14 +220,14 @@ def get_studies(conf:str) -> List[Study]:
 
     return [ Study(s) for s in studies_conf["meta"]]
 
-def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float] :
+def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float, float] :
     '''
         Computes meta-analysis between all studies and data given in the std_list
         input:
             study_list: studies and data in tuples
         output:
-            tuple in which first element is effective sample size weighted meta and second is std err weighted meta. Second element is none if
-            all studies did not have optional std err defined
+            tuple in which first element is effective sample size weighted meta, second is std err weighted meta and 3rd is inverse variance weighted meta.
+            2nd and 3rd elements are none if all studies did not have optional std err defined
     '''
 
     effs_size = []
@@ -217,23 +235,31 @@ def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float] :
 
     effs_se = []
     tot_se = 0
+
+    effs_inv_var = []
+    tot_inv = 0
+
     for s in study_list:
         study = s[0]
         dat = s[1]
         eff_size = ( (4 * study.n_cases *  study.n_controls  ) / ( study.n_cases+  study.n_controls ))
         zscore = math.copysign(1, dat.beta) * math.sqrt(chi2.isf(dat.pval, df=1))
-        
-        if dat.se is not None:
-            effs_se.append( (1/ dat.se )* zscore )
-            tot_se+= (1/ (dat.se * dat.se) )
+        if dat.se is not None and dat.se>0:
+            inv_var = 1/ (dat.se * dat.se)
+            effs_se.append( 1/dat.se * zscore )
+            tot_se+= inv_var
+            effs_inv_var.append( inv_var *  dat.beta )
 
         effs_size.append( math.sqrt(eff_size) * zscore)
         tot_size+=eff_size
 
     size_meta_p = scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
     stderr_meta_p = scipy.stats.norm.sf( abs( sum( effs_se ) ) / math.sqrt(tot_se) ) if len(effs_se)==len(study_list) else None
-    return (size_meta_p,stderr_meta_p)
+    inv_var_meta = scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se))) if len(effs_se)==len(study_list) else None
+    return (size_meta_p,stderr_meta_p, inv_var_meta)
 
+def format_num(num, precision=2):
+    return numpy.format_float_scientific(num, precision=precision) if num is not None else "NA"
 
 def run():
     '''
@@ -268,48 +294,53 @@ def run():
 
         out.write("\t".join(["CHR","POS","REF","ALT", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
 
+        out.write( ("\t" if len(studs[0].extra_cols) else "") + "\t".join( [studs[0].name + "_" + c for c in studs[0].extra_cols] ) )
         ## align to leftmost STUDY
         for oth in studs[1:len(studs)]:
-            out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval", studs[0].name + "_" + oth.name +"_meta_p"] ))
+            out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval"] ))
+            out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
+            out.write("\t" + studs[0].name + "_" + oth.name +"_meta_p")
             if studs[0].has_std_err() and oth.has_std_err():
-                out.write("\t" + studs[0].name + "_" + oth.name +"se_meta_p")
+                out.write("\t" + studs[0].name + "_" + oth.name +"se_meta_p" + "\t" + studs[0].name + "_" + oth.name +"_inv_meta_p")
 
         if sum( map( lambda x: x.has_std_err(), studs ))>1:
-            out.write("\tall_meta_N\tall_meta_p\tall_se_meta_p\n")
+            out.write("\tall_meta_N\tall_meta_p\tall_se_meta_p\tall_inv_meta_p\n")
         else:
             out.write("\tall_meta_N\tall_meta_p\n")
 
-
         while True:
-            ## change to class based get_data stuff...
             d = studs[0].get_next_data()
-
             if d is None:
                 break
             matching_studies = [ (studs[0],d) ]
-            outdat = [ d.chr, d.pos, d.ref, d.alt, numpy.format_float_scientific(d.beta, precision=2), numpy.format_float_scientific(d.pval, precision=2)  ]
+            outdat = [ d.chr, d.pos, d.ref, d.alt,format_num(d.beta), format_num(d.pval)  ]
+            outdat.extend([ c for c in d.extra_cols ])
 
             for oth in studs[1:len(studs)]:
                 match_dat = oth.get_match(d)
                 if match_dat is not None:
                     matching_studies.append( (oth,match_dat) )
                     met = do_meta( [(studs[0],d), (oth,match_dat)] )
-                    outdat.extend([numpy.format_float_scientific(match_dat.beta, precision=2), numpy.format_float_scientific(match_dat.pval, precision=2), numpy.format_float_scientific(met[0], precision=2) ])
 
+                    outdat.extend([format_num(match_dat.beta), format_num(match_dat.pval) ])
+                    outdat.extend([ c for c in match_dat.extra_cols ])
+                    outdat.append(format_num(met[0]))
                     if( studs[0].has_std_err() & oth.has_std_err() ):
-                        outdat.append( numpy.format_float_scientific(met[0], precision=2)  )
+                        outdat.append( format_num(met[1] )  )
+                        outdat.append( format_num(met[2])  )
                 else:
-                    outdat.extend(['NA']  * 3)
+                    outdat.extend(['NA']  * (3 + len(oth.extra_cols) + (2 if studs[0].has_std_err() & oth.has_std_err() else 0 ) ))
 
             if len(matching_studies)>1:
                 met = do_meta( matching_studies )
                 outdat.append( str(len(matching_studies)) )
-                outdat.append( numpy.format_float_scientific(met[0], precision=2) )
-                if all( map( lambda x: x.has_std_err(), studs )):
-                    outdat.append( numpy.format_float_scientific(met[1], precision=2) )
+                outdat.append( format_num(met[0]) )
+                if sum( map( lambda x: x.has_std_err(), studs ))>1:
+                    outdat.append( format_num(met[1]) )
+                    outdat.append( format_num(met[2]) )
 
             else:
-                outdat.extend(["NA"] * (2 + (1 if sum( map( lambda x: x.has_std_err(), studs ))>1 else 0) ))
+                outdat.extend(["NA"] * (2 + (2 if sum( map( lambda x: x.has_std_err(), studs ))>1 else 0) ))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 

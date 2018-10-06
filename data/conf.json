@@ -12,13 +12,14 @@
         "effect":"BETA",
         "effect_type":"beta",
         "pval":"p.value",
-        "se":"SE"
+        "se":"SE",
+        "extra_cols":["AF.Cases","AF.Controls"]
         },
         {
         "name":"UKBB",
-        "file":"/Users/mitja/projects/finngen/META_ANALYSIS/I48.imputed_v3.results.both_sexes.tsv.gz.lifted.gz",
-        "n_cases": 6751,
-        "n_controls": 354443,
+        "file":"/Users/mitja/projects/finngen/META_ANALYSIS/PheCode_427.2_SAIGE_MACge20.txt.gz.lifted.gz",
+        "n_cases": 14820,
+        "n_controls": 380919,
         "chr":"achr38",
         "pos":"apos38",
         "ref":"REF",
@@ -26,7 +27,8 @@
         "effect":"beta",
         "effect_type":"beta",
         "pval":"pval",
-        "se":"se"
+        "se":"sebeta",
+        "extra_cols":["af"]
         },
         {
         "name":"BBJ",
@@ -39,7 +41,9 @@
         "alt":"A2",
         "effect":"OR",
         "effect_type":"OR",
-        "pval":"PVALUE"
+        "pval":"PVALUE",
+        "se":"STDERR",
+        "extra_cols":["CASE_FREQ1","CTRL_FREQ1"]
         }
     ]
 }
