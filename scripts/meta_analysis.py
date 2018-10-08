@@ -28,6 +28,10 @@ flip = {"A":"T","C":"G","T":"A","G":"C"}
 def flip_strand( allele):
     return "".join([ flip[a] for a in allele])
 
+def is_symmetric(a1, a2):
+    return (a1=="A" and a2="T") or (a2=="A" and a1="T") or (a1=="C" and a2="G") (a2=="C" and a1="G")
+
+
 
 class MetaDat:
 
@@ -38,7 +42,12 @@ class MetaDat:
         self.alt = alt
         self.beta = beta
         self.pval = pval
-        self.se = float(se) if se is not None and str(se).isnumeric() else None
+
+        try:
+            self.se = float(se) if se is not None  else None
+        except ValueError:
+            self.se = None
+
         self.extra_cols = extra_cols
     def __eq__(self, other):
 
@@ -54,7 +63,19 @@ class MetaDat:
             flip_ref =  flip_strand(other.ref)
             flip_alt =  flip_strand(other.alt)
 
-            if( (self.ref == other.ref or self.ref==flip_ref) and (self.alt == other.alt or self.alt == flip_alt)):
+
+            if is_symmetric( other.ref, other.alt ):
+                ## never strandflip symmetrics
+                if self.ref == other.ref and self.alt == other.alt:
+                        return True
+                elif self.ref == other.alt and self.alt == other.ref:
+                    self.beta = -1 * self.beta
+                    t = self.alt
+                    self.alt = self.ref
+                    self.ref = t
+                    return True
+
+            elif( (self.ref == other.ref or self.ref==flip_ref) and (self.alt == other.alt or self.alt == flip_alt)):
                 return True
             elif (self.ref == other.alt or self.ref == flip_alt) and (self.alt == other.ref or self.alt==flip_alt ) :
                 self.beta = -1 * self.beta
@@ -64,6 +85,7 @@ class MetaDat:
                 return True
             else:
                 return False
+
     def __str__(self):
         return "chr:{} pos:{} ref:{} alt:{} beta:{} pval:{} se:{} ".format(self.chr, self.pos, self.ref, self.alt, self.beta, self.pval, self.se)
 
@@ -162,8 +184,8 @@ class Study:
         pval = l[self.conf["h_idx"]["pval"]]
 
         se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
-        effect_type = self.conf["effect_type"]
 
+        effect_type = self.conf["effect_type"]
         try:
             pval = float(pval)
             eff = float(eff)
@@ -248,10 +270,11 @@ def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float, fl
         dat = s[1]
         eff_size = ( (4 * study.n_cases *  study.n_controls  ) / ( study.n_cases+  study.n_controls ))
         zscore = math.copysign(1, dat.beta) * math.sqrt(chi2.isf(dat.pval, df=1))
+
         if dat.se is not None and dat.se>0:
             inv_var = 1/ (dat.se * dat.se)
-            effs_se.append( 1/dat.se * zscore )
-            tot_se+= inv_var
+            effs_se.append( (1/dat.se) * zscore )
+            tot_se+=inv_var
             effs_inv_var.append( inv_var *  dat.beta )
 
         effs_size.append( math.sqrt(eff_size) * zscore)
@@ -347,8 +370,8 @@ def run():
                 outdat.extend(["NA"] * (2 + (2 if sum( map( lambda x: x.has_std_err(), studs ))>1 else 0) ))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
-    subprocess.run(["bgzip",args.path_to_res])
-    subprocess.run(["tabix","-s 1 ","-b 2","-e 2s",args.path_to_res])
+    subprocess.run(["bgzip","--force",args.path_to_res])
+    subprocess.run(["tabix","-s 1 ","-b 2","-e 2",args.path_to_res])
 
 
 if __name__ == '__main__':
