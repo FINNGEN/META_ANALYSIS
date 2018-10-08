@@ -9,7 +9,7 @@ from scipy.stats import chi2
 import scipy.stats
 import numpy
 from typing import Dict, Tuple, List
-
+import subprocess
 
 chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
 chrord["chrX"] = 23
@@ -38,7 +38,7 @@ class MetaDat:
         self.alt = alt
         self.beta = beta
         self.pval = pval
-        self.se = float(se) if se is not None else None
+        self.se = float(se) if se is not None and str(se).isnumeric() else None
         self.extra_cols = extra_cols
     def __eq__(self, other):
 
@@ -348,7 +348,7 @@ def run():
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
     subprocess.run(["bgzip",args.path_to_res])
-    subprocess.run(["tabix","-s 1 ","-b 2","-e 2",args.path_to_res])
+    subprocess.run(["tabix","-s 1 ","-b 2","-e 2s",args.path_to_res])
 
 
 if __name__ == '__main__':
