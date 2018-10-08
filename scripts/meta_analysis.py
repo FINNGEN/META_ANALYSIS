@@ -105,6 +105,10 @@ class Study:
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
         header = conf["fpoint"].readline().rstrip().split("\t")
+
+        for k in Study.REQUIRED_DATA_FIELDS.keys():
+            if self.conf[k] not in header:
+                raise Exception("Required headers not in data in study " + self.conf["name"] + ". Missing:" + ",".join([ self.conf[k] for k in Study.REQUIRED_DATA_FIELDS.keys() if self.conf[k] not in header])  )
         self.conf["h_idx"] = { k:header.index( self.conf[k] ) for k in Study.REQUIRED_DATA_FIELDS.keys() }
 
         for f in Study.OPTIONAL_FIELDS.keys():
@@ -116,7 +120,7 @@ class Study:
         if "extra_cols" in self.conf:
             for c in self.conf["extra_cols"]:
                 if c not in header:
-                    raise Exception("Configured column " + self.conf[f] + " not found in the study results " + self.conf["name"])
+                    raise Exception("Configured column " + self.conf[c] + " not found in the study results " + self.conf["name"])
                 self.conf["h_idx"][c] = header.index(c)
         else:
              self.conf["extra_cols"] = []
@@ -343,6 +347,9 @@ def run():
                 outdat.extend(["NA"] * (2 + (2 if sum( map( lambda x: x.has_std_err(), studs ))>1 else 0) ))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
+    subprocess.run(["bgzip",args.path_to_res])
+    subprocess.run(["tabix","-s 1 ","-b 2","-e 2",args.path_to_res])
+
 
 if __name__ == '__main__':
     run()
