@@ -173,7 +173,6 @@ class Study:
                 just_one: always returns only the next variant in order and not all next with the same position
             returns: list of next variants
         """
-
         if len(self.future)>0:
             ## only return variants with same position so that possible next variant position stored stays
             f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos) ]
@@ -250,15 +249,14 @@ class Study:
         if otherdats is None or len(otherdats)==0:
             return None
 
-        v = otherdats[0]
-        while v is not None and (v.chr<dat.chr or (v.chr==dat.chr and v.pos<dat.pos)):
-            otherdats = self.get_next_data()
-            v = otherdats[0]
 
-        if v is None:
+        while otherdats is not None and (otherdats[0].chr<dat.chr or (otherdats[0].chr==dat.chr and otherdats[0].pos<dat.pos)):
+            otherdats = self.get_next_data()
+
+        if otherdats is None:
             return None
 
-        if v.chr > dat.chr or v.pos> dat.pos:
+        if otherdats[0].chr > dat.chr or otherdats[0].pos> dat.pos:
             self.put_back(otherdats)
             return None
 
@@ -390,11 +388,11 @@ def run():
             matching_studies = [ (studs[0],d) ]
             outdat = [ d.chr, d.pos, d.ref, d.alt,format_num(d.beta), format_num(d.pval)  ]
             outdat.extend([ c for c in d.extra_cols ])
-
             for oth in studs[1:len(studs)]:
-
                 match_dat = oth.get_match(d)
+
                 if match_dat is not None:
+
                     matching_studies.append( (oth,match_dat) )
                     met = do_meta( [(studs[0],d), (oth,match_dat)] )
                     outdat.extend([format_num(match_dat.beta), format_num(match_dat.pval) ])
