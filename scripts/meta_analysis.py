@@ -175,7 +175,6 @@ class Study:
         """
 
         if len(self.future)>0:
-            print("FUTURE" + ",".join([ str(f) for f in self.future  ]))
             ## only return variants with same position so that possible next variant position stored stays
             f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos) ]
             for i,v in reversed(f):
@@ -221,14 +220,12 @@ class Study:
             extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
 
             v = MetaDat(chr,pos,ref,alt, eff, pval, se, extracols)
-            print("next var" + str(v))
+
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
-                print("putting it to list")
                 vars.append(v )
                 if just_one:
                     break
             else:
-                print("saving for future")
                 self.future.append(v )
                 break
 
@@ -247,10 +244,8 @@ class Study:
                 dat: the variant to look for
             output: matching MetaDat in this study or None if no match.
         """
-        print("matching" + str(dat))
-        otherdats = self.get_next_data( )
 
-        print("otherdats" ",".join( [ str(d) for d in otherdats ] )  )
+        otherdats = self.get_next_data( )
 
         if otherdats is None or len(otherdats)==0:
             return None
@@ -424,8 +419,6 @@ def run():
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
-            if d.chr==2:
-                sys.exit(0)
             d = studs[0].get_next_data(just_one = True)
 
     subprocess.run(["bgzip","--force",args.path_to_res])
