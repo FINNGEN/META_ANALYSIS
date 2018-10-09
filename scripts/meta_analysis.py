@@ -39,8 +39,8 @@ class MetaDat:
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
         self.pos = int(pos)
-        self.ref = ref
-        self.alt = alt
+        self.ref = ref.strip()
+        self.alt = alt.strip()
         self.beta = beta
         self.pval = pval
 
@@ -176,22 +176,25 @@ class Study:
 
         if len(self.future)>0:
             ## only return variants with same position so that possible next variant position stored stays
-            f = [ (i,v) for (i,v) in enumerate(self.future) if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos)  ]
+            f = self.future[0:len(self.future)-1] if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos)  ]
             for i,v in reversed(f):
                  del self.future[i]
-
             return [ v for i,v in f ]
 
-        vars = deque()
+        vars = list()
         while True:
-
             ## loop ignoring  alternate contigs for now.
             chr = None
             l = None
             while chr is None or chr not in chrord:
                 l = self.conf["fpoint"].readline()
                 if l=="":
-                    return vars if len(vars)>0 else None
+                    ret = None
+                    if len(self.future)>0 :
+                        ret = self.future.copy()
+                        self.future.clear()
+
+                    return ret
 
                 l = l.rstrip().split("\t")
                 chr = l[self.conf["h_idx"]["chr"]]
@@ -217,8 +220,7 @@ class Study:
             if( effect_type=="or" and eff):
                 eff = math.log(eff)
 
-            if not chr.endswith("_alt") and not chr.endswith("_random"):
-                chr = chrord[chr]
+            chr = chrord[chr]
             extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
 
             v = MetaDat(chr,pos,ref,alt, eff, pval, se, extracols)
@@ -253,9 +255,12 @@ class Study:
             return None
 
         v = otherdats[0]
-        while v is not None and v.chr==dat.chr and v.pos<dat.pos:
+        while v is not None and (v.chr<dat.chr or (v.chr==dat.chr and v.pos<dat.pos)):
             otherdats = self.get_next_data()
             v = otherdats[0]
+
+        if v is None:
+            return None
 
         if v.chr > dat.chr or v.pos> dat.pos:
             self.put_back(otherdats)
@@ -274,6 +279,7 @@ class Study:
 
     def put_back(self, metadat):
         for m in metadat:
+            ## the future in next position will be always kept last
             self.future.appendleft(m)
 
 
@@ -380,15 +386,11 @@ def run():
         else:
             out.write("\tall_meta_N\tall_meta_p\n")
 
-        while True:
+        d = studs[0].get_next_data(just_one = True)
+        while d is not None:
+
             ## only one variant read at a time from matched study
-            d = studs[0].get_next_data(just_one = True)
-
-            if d is None:
-                break
-
             d = d[0]
-
             matching_studies = [ (studs[0],d) ]
             outdat = [ d.chr, d.pos, d.ref, d.alt,format_num(d.beta), format_num(d.pval)  ]
             outdat.extend([ c for c in d.extra_cols ])
@@ -399,7 +401,6 @@ def run():
                 if match_dat is not None:
                     matching_studies.append( (oth,match_dat) )
                     met = do_meta( [(studs[0],d), (oth,match_dat)] )
-
                     outdat.extend([format_num(match_dat.beta), format_num(match_dat.pval) ])
                     outdat.extend([ c for c in match_dat.extra_cols ])
                     outdat.append(format_num(met[0]))
@@ -421,6 +422,8 @@ def run():
                 outdat.extend(["NA"] * (2 + (2 if sum( map( lambda x: x.has_std_err(), studs ))>1 else 0) ))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
+            d = studs[0].get_next_data(just_one = True)
+
     subprocess.run(["bgzip","--force",args.path_to_res])
     subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res + ".gz"])
 
