@@ -166,9 +166,12 @@ class Study:
     def has_std_err(self):
         return "se" in self.conf
 
-    def get_next_data(self):
+    def get_next_data(self, just_one =False) -> List(MetaDat):
         """
-            Returns a list of variants. List containts >1 elements if they are on the same position.
+            Returns a list of variants. List containts >1 elements if they are on the same position and just_one ==False.
+            args:
+                just_one: always returns only the next variant in order and not all next with the same position
+            returns: list of next variants
         """
 
         if len(self.future)>0:
@@ -222,6 +225,8 @@ class Study:
 
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 vars.appendleft(v )
+                if just_one:
+                    break
             else:
                 self.future.append(v )
                 break
@@ -376,12 +381,12 @@ def run():
             out.write("\tall_meta_N\tall_meta_p\n")
 
         while True:
-            d = studs[0].get_next_data()
+            ## only one variant read at a time from matched study
+            d = studs[0].get_next_data(just_one = True)
 
             if d is None:
                 break
 
-            ## only one variant read at a time from matched study
             d = d[0]
 
             matching_studies = [ (studs[0],d) ]
@@ -417,7 +422,7 @@ def run():
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
     subprocess.run(["bgzip","--force",args.path_to_res])
-    subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res])
+    subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res + ".gz"])
 
 
 if __name__ == '__main__':
