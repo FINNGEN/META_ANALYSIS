@@ -417,7 +417,7 @@ def run():
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
     subprocess.run(["bgzip","--force",args.path_to_res])
-    subprocess.run(["tabix","-s 1 ","-b 2","-e 2",args.path_to_res])
+    subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res])
 
 
 if __name__ == '__main__':
