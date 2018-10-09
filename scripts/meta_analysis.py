@@ -10,6 +10,7 @@ import scipy.stats
 import numpy
 from typing import Dict, Tuple, List
 import subprocess
+from collections import deque
 
 chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
 chrord["chrX"] = 23
@@ -29,7 +30,7 @@ def flip_strand( allele):
     return "".join([ flip[a] for a in allele])
 
 def is_symmetric(a1, a2):
-    return (a1=="A" and a2="T") or (a2=="A" and a1="T") or (a1=="C" and a2="G") (a2=="C" and a1="G")
+    return (a1=="A" and a2=="T") or (a1=="T" and a2=="A") or (a1=="C" and a2=="G") or (a1=="G" and a2=="C")
 
 
 
@@ -37,7 +38,7 @@ class MetaDat:
 
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
-        self.pos = pos
+        self.pos = int(pos)
         self.ref = ref
         self.alt = alt
         self.beta = beta
@@ -67,9 +68,9 @@ class MetaDat:
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics
                 if self.ref == other.ref and self.alt == other.alt:
-                        return True
+                    return True
                 elif self.ref == other.alt and self.alt == other.ref:
-                    self.beta = -1 * self.beta
+                    self.beta = -1 * self.beta if self.beta is not None else None
                     t = self.alt
                     self.alt = self.ref
                     self.ref = t
@@ -78,7 +79,7 @@ class MetaDat:
             elif( (self.ref == other.ref or self.ref==flip_ref) and (self.alt == other.alt or self.alt == flip_alt)):
                 return True
             elif (self.ref == other.alt or self.ref == flip_alt) and (self.alt == other.ref or self.alt==flip_alt ) :
-                self.beta = -1 * self.beta
+                self.beta = -1 * self.beta if self.beta is not None else None
                 t = self.alt
                 self.alt = self.ref
                 self.ref = t
@@ -103,7 +104,7 @@ class Study:
 
     def __init__(self, conf):
         self.conf =conf
-        self.future = None
+        self.future = deque()
 
         for v in Study.REQUIRED_CONF:
             if v not in self.conf:
@@ -166,43 +167,68 @@ class Study:
         return "se" in self.conf
 
     def get_next_data(self):
+        """
+            Returns a list of variants. List containts >1 elements if they are on the same position.
+        """
 
-        if self.future is not None:
-            f = self.future
-            self.future =None
-            return f
+        if len(self.future)>0:
+            ## only return variants with same position so that possible next variant position stored stays
+            f = [ (i,v) for (i,v) in enumerate(self.future) if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos)  ]
+            for i,v in reversed(f):
+                 del self.future[i]
 
-        l = self.conf["fpoint"].readline()
-        if l=="":
-            return None
-        l = l.rstrip().split("\t")
-        chr = l[self.conf["h_idx"]["chr"]]
-        pos = l[self.conf["h_idx"]["pos"]]
-        ref = l[self.conf["h_idx"]["ref"]]
-        alt = l[self.conf["h_idx"]["alt"]]
-        eff = l[self.conf["h_idx"]["effect"]]
-        pval = l[self.conf["h_idx"]["pval"]]
+            return [ v for i,v in f ]
 
-        se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
+        vars = deque()
+        while True:
+            ## loop ignoring  alternate contigs for now.
+            chr = None
+            l = None
+            while chr is None or chr not in chrord:
+                l = self.conf["fpoint"].readline()
+                if l=="":
+                    return vars if len(vars)>0 else None
 
-        effect_type = self.conf["effect_type"]
-        try:
-            pval = float(pval)
-            eff = float(eff)
-        except Exception as e:
-            pval = None
-            eff = None
+                l = l.rstrip().split("\t")
+                chr = l[self.conf["h_idx"]["chr"]]
 
-        if( effect_type=="or" and eff):
-            eff = math.log(eff)
+            pos = l[self.conf["h_idx"]["pos"]]
+            ref = l[self.conf["h_idx"]["ref"]]
+            alt = l[self.conf["h_idx"]["alt"]]
+            eff = l[self.conf["h_idx"]["effect"]]
+            pval = l[self.conf["h_idx"]["pval"]]
 
-        if not chr.endswith("_alt") and not chr.endswith("_random"):
-            chr = chrord[chr]
+            pos = int(pos)
 
+            se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
-        extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
+            effect_type = self.conf["effect_type"]
+            try:
+                pval = float(pval)
+                eff = float(eff)
+            except Exception as e:
+                pval = None
+                eff = None
 
-        return MetaDat(chr,int(pos),ref,alt, eff, pval, se, extracols)
+            if( effect_type=="or" and eff):
+                eff = math.log(eff)
+
+            if not chr.endswith("_alt") and not chr.endswith("_random"):
+                chr = chrord[chr]
+            extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
+
+            v = MetaDat(chr,pos,ref,alt, eff, pval, se, extracols)
+            if (v.pos==170644728):
+                print("HERE " +  self.name + str(v) )
+                [ print(str(i)) for i in self.future ]
+
+            if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
+                vars.appendleft(v )
+            else:
+                vars.append(v )
+                break
+
+        return vars
 
     @property
     def extra_cols(self):
@@ -217,23 +243,39 @@ class Study:
                 dat: the variant to look for
             output: matching MetaDat in this study or None if no match.
         """
+        otherdats = self.get_next_data( )
 
-        otherdat = self.get_next_data( )
+        if( dat.pos==170644728):
+            print("CHECKING IT" )
 
-        while otherdat is not None and otherdat.chr==dat.chr and otherdat.pos<dat.pos:
-            otherdat = self.get_next_data()
-
-        if otherdat is None:
+        if otherdats is None or len(otherdats)==0:
             return None
 
-        if otherdat.chr != dat.chr or otherdat.pos> dat.pos:
-            self.put_back(otherdat)
+        v = otherdats[0]
+        while v is not None and v.chr==dat.chr and v.pos<dat.pos:
+            otherdats = self.get_next_data()
+            v = otherdats[0]
+
+        if v.chr > dat.chr or v.pos> dat.pos:
+            self.put_back(otherdats)
             return None
-        elif otherdat.equalize(dat):
-            return otherdat
+
+        for i,v in enumerate(otherdats):
+            if( dat.pos==170644728):
+                print("EQUALIZING" + str(v) + " to " + str(dat) )
+            if v.equalize(dat):
+                del otherdats[i]
+                self.put_back(otherdats)
+                return v
+
+        ## no match but stayed in the same pos. add variants back to future queue
+        self.put_back(otherdats)
+        return None
+
 
     def put_back(self, metadat):
-        self.future =metadat
+        for m in metadat:
+            self.future.appendleft(m)
 
 
 def get_studies(conf:str) -> List[Study]:
@@ -268,6 +310,10 @@ def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float, fl
     for s in study_list:
         study = s[0]
         dat = s[1]
+
+        if dat.pval is None or dat.beta is None:
+            continue
+
         eff_size = ( (4 * study.n_cases *  study.n_controls  ) / ( study.n_cases+  study.n_controls ))
         zscore = math.copysign(1, dat.beta) * math.sqrt(chi2.isf(dat.pval, df=1))
 
@@ -319,7 +365,7 @@ def run():
 
     with open( outfile, 'w' ) as out:
 
-        out.write("\t".join(["CHR","POS","REF","ALT", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
+        out.write("\t".join(["#CHR","POS","REF","ALT", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
 
         out.write( ("\t" if len(studs[0].extra_cols) else "") + "\t".join( [studs[0].name + "_" + c for c in studs[0].extra_cols] ) )
         ## align to leftmost STUDY
@@ -337,13 +383,19 @@ def run():
 
         while True:
             d = studs[0].get_next_data()
+
             if d is None:
                 break
+
+            ## only one variant read at a time from matched study
+            d = d[0]
+
             matching_studies = [ (studs[0],d) ]
             outdat = [ d.chr, d.pos, d.ref, d.alt,format_num(d.beta), format_num(d.pval)  ]
             outdat.extend([ c for c in d.extra_cols ])
 
             for oth in studs[1:len(studs)]:
+
                 match_dat = oth.get_match(d)
                 if match_dat is not None:
                     matching_studies.append( (oth,match_dat) )
