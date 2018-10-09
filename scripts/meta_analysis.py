@@ -166,7 +166,7 @@ class Study:
     def has_std_err(self):
         return "se" in self.conf
 
-    def get_next_data(self, just_one =False) -> List(MetaDat):
+    def get_next_data(self, just_one =False) -> List[MetaDat]:
         """
             Returns a list of variants. List containts >1 elements if they are on the same position and just_one ==False.
             args:
