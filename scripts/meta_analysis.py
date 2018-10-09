@@ -14,7 +14,7 @@ from collections import deque
 
 chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
 chrord["chrX"] = 23
-chrord["chrT"] = 24
+chrord["chrY"] = 24
 chrord["chrMT"] = 25
 chrord.update({str(chr):int(chr) for chr in list(range(1,23)) } )
 
@@ -181,6 +181,7 @@ class Study:
 
         vars = deque()
         while True:
+
             ## loop ignoring  alternate contigs for now.
             chr = None
             l = None
@@ -218,9 +219,6 @@ class Study:
             extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
 
             v = MetaDat(chr,pos,ref,alt, eff, pval, se, extracols)
-            if (v.pos==170644728):
-                print("HERE " +  self.name + str(v) )
-                [ print(str(i)) for i in self.future ]
 
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 vars.appendleft(v )
@@ -245,8 +243,6 @@ class Study:
         """
         otherdats = self.get_next_data( )
 
-        if( dat.pos==170644728):
-            print("CHECKING IT" )
 
         if otherdats is None or len(otherdats)==0:
             return None
@@ -261,8 +257,6 @@ class Study:
             return None
 
         for i,v in enumerate(otherdats):
-            if( dat.pos==170644728):
-                print("EQUALIZING" + str(v) + " to " + str(dat) )
             if v.equalize(dat):
                 del otherdats[i]
                 self.put_back(otherdats)
