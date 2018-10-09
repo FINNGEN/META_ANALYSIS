@@ -223,7 +223,7 @@ class Study:
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 vars.appendleft(v )
             else:
-                vars.append(v )
+                self.future.append(v )
                 break
 
         return vars
