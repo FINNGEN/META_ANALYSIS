@@ -162,7 +162,6 @@ class Study:
     def name(self):
         return self.conf["name"]
 
-
     def has_std_err(self):
         return "se" in self.conf
 
@@ -182,9 +181,9 @@ class Study:
 
         vars = list()
         while True:
-            ## loop ignoring  alternate contigs for now.
             chr = None
             l = None
+            ## loop ignoring  alternate contigs for now.
             while chr is None or chr not in chrord:
                 l = self.conf["fpoint"].readline()
                 if l=="":
@@ -192,7 +191,6 @@ class Study:
 
                 l = l.rstrip().split("\t")
                 chr = l[self.conf["h_idx"]["chr"]]
-
 
             pos = l[self.conf["h_idx"]["pos"]]
             ref = l[self.conf["h_idx"]["ref"]]
@@ -248,7 +246,6 @@ class Study:
 
         if otherdats is None or len(otherdats)==0:
             return None
-
 
         while otherdats is not None and (otherdats[0].chr<dat.chr or (otherdats[0].chr==dat.chr and otherdats[0].pos<dat.pos)):
             otherdats = self.get_next_data()
@@ -325,9 +322,10 @@ def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float, fl
         effs_size.append( math.sqrt(eff_size) * zscore)
         tot_size+=eff_size
 
+    denum = math.sqrt(tot_se)
     size_meta_p = scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
-    stderr_meta_p = scipy.stats.norm.sf( abs( sum( effs_se ) ) / math.sqrt(tot_se) ) if len(effs_se)==len(study_list) else None
-    inv_var_meta = scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se))) if len(effs_se)==len(study_list) else None
+    stderr_meta_p = scipy.stats.norm.sf( abs( sum( effs_se ) ) /  denum) if len(effs_se)==len(study_list) else None
+    inv_var_meta = scipy.stats.norm.sf(abs(sum(effs_inv_var) / denum )) if len(effs_se)==len(study_list) else None
     return (size_meta_p,stderr_meta_p, inv_var_meta)
 
 def format_num(num, precision=2):
