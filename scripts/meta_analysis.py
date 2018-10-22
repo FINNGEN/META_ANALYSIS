@@ -18,6 +18,46 @@ chrord["chrY"] = 24
 chrord["chrMT"] = 25
 chrord.update({str(chr):int(chr) for chr in list(range(1,23)) } )
 
+def n_meta( studies : List[Tuple['Study','MetaDat']] ):
+    effs_size = []
+    tot_size =0
+    for s in studies:
+        study = s[0]
+        dat = s[1]
+        effs_size.append( math.sqrt(study.effective_size) * numpy.sign(dat.beta) * dat.z_score)
+        tot_size+=study.effective_size
+
+    return scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
+
+def inv_var_meta( studies : List[Tuple['Study','MetaDat']] ):
+
+    effs_inv_var = []
+    tot_se = 0
+    for s in studies:
+        study = s[0]
+        dat = s[1]
+        print(dat)
+        var = (dat.se * dat.se)
+        tot_se+=1/var
+        effs_inv_var.append(var *  dat.beta )
+
+    return scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) if len(effs_inv_var)==len(studies) else None
+
+def variance_weight_meta( studies : List[Tuple['Study','MetaDat']] ):
+    effs_se = []
+    tot_se = 0
+
+    for s in studies:
+        study = s[0]
+        dat = s[1]
+
+        effs_se.append( (1/dat.se) * numpy.sign(dat.beta) * dat.z_score )
+        tot_se+=1/ (dat.se * dat.se)
+    return scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) if len(effs_se)==len(studies) else None
+
+
+SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
+
 def check_eff_field(field):
     if field.lower() in ["beta","or"]:
         return field.lower()
@@ -43,7 +83,7 @@ class MetaDat:
         self.alt = alt.strip()
         self.beta = beta
         self.pval = pval
-
+        self.z_scr = None
         try:
             self.se = float(se) if se is not None  else None
         except ValueError:
@@ -87,6 +127,15 @@ class MetaDat:
             else:
                 return False
 
+    @property
+    def z_score(self):
+        '''
+            Lazy compute unsigned z-score
+        '''
+        if self.z_scr is None:
+            self.z_scr = math.sqrt(chi2.isf(self.pval, df=1))
+        return self.z_scr
+
     def __str__(self):
         return "chr:{} pos:{} ref:{} alt:{} beta:{} pval:{} se:{} ".format(self.chr, self.pos, self.ref, self.alt, self.beta, self.pval, self.se)
 
@@ -105,7 +154,8 @@ class Study:
     def __init__(self, conf):
         self.conf =conf
         self.future = deque()
-
+        self.eff_size= None
+        self.z_scr = None
         for v in Study.REQUIRED_CONF:
             if v not in self.conf:
                 raise Exception("Meta configuration for study must contain required elements: "
@@ -158,6 +208,11 @@ class Study:
     def n_controls(self):
         return self.conf["n_cases"]
 
+    @property
+    def effective_size(self):
+        if self.eff_size is None:
+            self.eff_size = ( (4 * self.n_cases *  self.n_controls  ) / ( self.n_cases+  self.n_controls ))
+        return self.eff_size
     @property
     def name(self):
         return self.conf["name"]
@@ -233,6 +288,7 @@ class Study:
         return self.conf["extra_cols"]
 
 
+
     def get_match(self, dat: MetaDat) -> MetaDat:
         """
             Reads current study until variant in 'dat' is reached or overtaken in chr pos orded.
@@ -284,7 +340,7 @@ def get_studies(conf:str) -> List[Study]:
 
     return [ Study(s) for s in studies_conf["meta"]]
 
-def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float, float] :
+def do_meta(study_list: List[ Tuple[Study, MetaDat]], methods: List[str] ) -> List[float] :
     '''
         Computes meta-analysis between all studies and data given in the std_list
         input:
@@ -293,40 +349,7 @@ def do_meta(study_list: List[ Tuple[Study, MetaDat]] ) -> Tuple[float, float, fl
             tuple in which first element is effective sample size weighted meta, second is std err weighted meta and 3rd is inverse variance weighted meta.
             2nd and 3rd elements are none if all studies did not have optional std err defined
     '''
-
-    effs_size = []
-    tot_size = 0
-
-    effs_se = []
-    tot_se = 0
-
-    effs_inv_var = []
-    tot_inv = 0
-
-    for s in study_list:
-        study = s[0]
-        dat = s[1]
-
-        if dat.pval is None or dat.beta is None:
-            continue
-
-        eff_size = ( (4 * study.n_cases *  study.n_controls  ) / ( study.n_cases+  study.n_controls ))
-        zscore = math.copysign(1, dat.beta) * math.sqrt(chi2.isf(dat.pval, df=1))
-
-        if dat.se is not None and dat.se>0:
-            inv_var = 1/ (dat.se * dat.se)
-            effs_se.append( (1/dat.se) * zscore )
-            tot_se+=inv_var
-            effs_inv_var.append( inv_var *  dat.beta )
-
-        effs_size.append( math.sqrt(eff_size) * zscore)
-        tot_size+=eff_size
-
-    denum = math.sqrt(tot_se)
-    size_meta_p = scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
-    stderr_meta_p = scipy.stats.norm.sf( abs( sum( effs_se ) ) /  denum) if len(effs_se)==len(study_list) else None
-    inv_var_meta = scipy.stats.norm.sf(abs(sum(effs_inv_var) / denum )) if len(effs_se)==len(study_list) else None
-    return (size_meta_p,stderr_meta_p, inv_var_meta)
+    return [ SUPPORTED_METHODS[m](study_list) for m in methods ]
 
 def format_num(num, precision=2):
     return numpy.format_float_scientific(num, precision=precision) if num is not None else "NA"
@@ -354,9 +377,24 @@ def run():
     parser.add_argument('config_file', action='store', type=str, help='Configuration file ')
     parser.add_argument('path_to_res', action='store', type=str, help='Result file')
 
+    parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
+            + 'Allowed values [n,inv_var,variance]', default="inv_var")
+
     args = parser.parse_args()
 
     studs = get_studies(args.config_file)
+
+    methods = []
+
+    for m in args.methods.split(","):
+        if m not in SUPPORTED_METHODS:
+            raise Exception("Unsupported meta method" + m + " given. Supported values" + ",".join(SUPPORTED_METHODS))
+        methods.append(m)
+
+    if "inv_var" in methods or "variance" in methods:
+        for s in studs:
+            if not s.has_std_err():
+                raise Exception("Variance based method requested but not all studies have se column specified.")
 
     outfile = args.path_to_res
 
@@ -369,14 +407,14 @@ def run():
         for oth in studs[1:len(studs)]:
             out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval"] ))
             out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
-            out.write("\t" + studs[0].name + "_" + oth.name +"_meta_p")
-            if studs[0].has_std_err() and oth.has_std_err():
-                out.write("\t" + studs[0].name + "_" + oth.name +"se_meta_p" + "\t" + studs[0].name + "_" + oth.name +"_inv_meta_p")
 
-        if sum( map( lambda x: x.has_std_err(), studs ))>1:
-            out.write("\tall_meta_N\tall_meta_p\tall_se_meta_p\tall_inv_meta_p\n")
-        else:
-            out.write("\tall_meta_N\tall_meta_p\n")
+            for m in methods:
+                out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
+
+        out.write("\tall_meta_N")
+        for m in methods:
+            out.write("\tall_"+  m +"_meta_p")
+        out.write("\n")
 
         d = studs[0].get_next_data(just_one = True)
         while d is not None:
@@ -390,28 +428,25 @@ def run():
                 match_dat = oth.get_match(d)
 
                 if match_dat is not None:
-
                     matching_studies.append( (oth,match_dat) )
-                    met = do_meta( [(studs[0],d), (oth,match_dat)] )
+                    met = do_meta( [(studs[0],d), (oth,match_dat)], methods=methods )
                     outdat.extend([format_num(match_dat.beta), format_num(match_dat.pval) ])
                     outdat.extend([ c for c in match_dat.extra_cols ])
-                    outdat.append(format_num(met[0]))
-                    if( studs[0].has_std_err() & oth.has_std_err() ):
-                        outdat.append( format_num(met[1] )  )
-                        outdat.append( format_num(met[2])  )
+
+                    for m in met:
+                        outdat.append(format_num(m))
                 else:
-                    outdat.extend(['NA']  * (3 + len(oth.extra_cols) + (2 if studs[0].has_std_err() & oth.has_std_err() else 0 ) ))
+                    outdat.extend(['NA']  * (2 + len(oth.extra_cols) + len(methods) ) )
 
             if len(matching_studies)>1:
-                met = do_meta( matching_studies )
+                met = do_meta( matching_studies, methods=methods )
                 outdat.append( str(len(matching_studies)) )
-                outdat.append( format_num(met[0]) )
-                if sum( map( lambda x: x.has_std_err(), studs ))>1:
-                    outdat.append( format_num(met[1]) )
-                    outdat.append( format_num(met[2]) )
+
+                for m in met:
+                    outdat.append( format_num(m) )
 
             else:
-                outdat.extend(["NA"] * (2 + (2 if sum( map( lambda x: x.has_std_err(), studs ))>1 else 0) ))
+                outdat.extend(["NA"] *  len(methods) )
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
