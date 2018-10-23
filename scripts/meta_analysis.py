@@ -36,8 +36,12 @@ def inv_var_meta( studies : List[Tuple['Study','MetaDat']] ):
     for s in studies:
         study = s[0]
         dat = s[1]
-        print(dat)
+
+        if dat.se is None or dat.se==0:
+            print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
+            break
         var = (dat.se * dat.se)
+
         tot_se+=1/var
         effs_inv_var.append(var *  dat.beta )
 
@@ -50,6 +54,10 @@ def variance_weight_meta( studies : List[Tuple['Study','MetaDat']] ):
     for s in studies:
         study = s[0]
         dat = s[1]
+
+        if dat.se is None or dat.se==0:
+            print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
+            break
 
         effs_se.append( (1/dat.se) * numpy.sign(dat.beta) * dat.z_score )
         tot_se+=1/ (dat.se * dat.se)
@@ -287,8 +295,6 @@ class Study:
     def extra_cols(self):
         return self.conf["extra_cols"]
 
-
-
     def get_match(self, dat: MetaDat) -> MetaDat:
         """
             Reads current study until variant in 'dat' is reached or overtaken in chr pos orded.
@@ -385,6 +391,7 @@ def run():
     studs = get_studies(args.config_file)
 
     methods = []
+
 
     for m in args.methods.split(","):
         if m not in SUPPORTED_METHODS:
