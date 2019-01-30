@@ -17,7 +17,7 @@ parser.add_argument("-pos", help="Position column name")
 parser.add_argument("-ref", help="ref column name")
 parser.add_argument("-alt", help="alt column name")
 parser.add_argument("-chain_file", help="optional chain file path")
-parser.add_argument("-no_clean", action="store_true" , default=False, help="alt column name")
+parser.add_argument("-no_clean", action="store_true" , default=False, help="Do not clean intermediate files after execution")
 
 
 args = parser.parse_args()
@@ -87,7 +87,7 @@ with openf( args.file ,'rt') as res:
     with open(tmpbed, 'w') as bed:
         for line in res:
             vardat = get_dat_func(line.rstrip("\n").split())
-            bed.write( "{}\t{}\t{}\t{}".format("chr"+vardat[0], str(int(vardat[1])-1), str(int(vardat[1]) + max(len(vardat[2]),len(vardat[3]) ) -1), ":".join([vardat[0],vardat[1],vardat[2],vardat[3]])) + "\n" )
+            bed.write( "{}\t{}\t{}\t{}".format(vardat[0] if vardat[0].startswith('chr') else "chr"+vardat[0], str(int(vardat[1])-1), str(int(vardat[1]) + max(len(vardat[2]),len(vardat[3]) ) -1), ":".join([vardat[0],vardat[1],vardat[2],vardat[3]])) + "\n" )
 
     temp = f + str(uuid.uuid4())
     subprocess.run([liftOver, tmpbed ,CHAINFILE, temp + "_lifted", temp + "_errors"])
