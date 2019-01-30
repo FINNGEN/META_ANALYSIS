@@ -16,13 +16,20 @@ parser.add_argument("-chr", help="Chromosome column name")
 parser.add_argument("-pos", help="Position column name")
 parser.add_argument("-ref", help="ref column name")
 parser.add_argument("-alt", help="alt column name")
-
+parser.add_argument("-chain_file", help="optional chain file path")
 parser.add_argument("-no_clean", action="store_true" , default=False, help="alt column name")
 
 
 args = parser.parse_args()
 
-CHAINFILE="data/hg19ToHg38.over.chain.gz"
+script_dir =os.path.dirname(os.path.abspath(__file__))
+
+if not args.chain_file:
+    CHAINFILE= script_dir+ "/../data/hg19ToHg38.over.chain.gz"
+else:
+    CHAINFILE=args.chain_file
+
+print("CHAINFILE" + CHAINFILE)
 liftOver="liftOver"
 chr = None
 pos = None
@@ -39,7 +46,14 @@ def get_dat_var(line, index):
         return None
     return d
 
-with gzip.open( args.file ,'rt') as res:
+openf = open
+
+suffix = args.file.split(".")[-1]
+
+if suffix.lower() in ["gz","zip","bgzip"]:
+    openf= gzip.open
+
+with openf( args.file ,'rt') as res:
     header = res.readline().rstrip("\n").split()
 
     if args.var is None:
@@ -78,10 +92,11 @@ with gzip.open( args.file ,'rt') as res:
     temp = f + str(uuid.uuid4())
     subprocess.run([liftOver, tmpbed ,CHAINFILE, temp + "_lifted", temp + "_errors"])
 
-    joincmd = ["scripts/joinsort.sh", args.file, temp + "_lifted" ]
+    joincmd = [script_dir +"/joinsort.sh", args.file, temp + "_lifted" ]
     joincmd.extend([ str(v) for v in joinsortargs])
     subprocess.run(joincmd)
 
     if not args.no_clean:
-        subprocess.run(["rm",temp + "_lifted"], shell=True)
-        subprocess.run(["rm",tmpbed], shell=True)
+        print("Deleting intermediate files " + temp + "_lifted and " +tmpbed)
+        subprocess.run(["rm",temp + "_lifted"])
+        subprocess.run(["rm",tmpbed])
