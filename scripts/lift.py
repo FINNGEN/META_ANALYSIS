@@ -90,7 +90,7 @@ with openf( args.file ,'rt') as res:
             try:
                 bed.write( "{}\t{}\t{}\t{}".format(vardat[0] if vardat[0].startswith('chr') else "chr"+vardat[0], str(int(vardat[1])-1), str(int(vardat[1]) + max(len(vardat[2]),len(vardat[3]) ) -1), ":".join([vardat[0],vardat[1],vardat[2],vardat[3]])) + "\n" )
             except ValueError:
-                # ignore strange contigs
+                print("Ignoring unexpected chromosome position: " + ":".join([vardat[0],vardat[1],vardat[2],vardat[3]]))
                 pass
 
     temp = f + str(uuid.uuid4())
