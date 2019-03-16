@@ -16,7 +16,7 @@ chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
 chrord["chrX"] = 23
 chrord["chrY"] = 24
 chrord["chrMT"] = 25
-chrord.update({str(chr):int(chr) for chr in list(range(1,23)) } )
+chrord.update({str(chr):int(chr) for chr in list(range(1,25)) } )
 
 def n_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_size = []
