@@ -18,7 +18,7 @@ chrord["chrY"] = 24
 chrord["chrMT"] = 25
 chrord.update({str(chr):int(chr) for chr in list(range(1,23)) } )
 
-def n_meta( studies : List[Tuple['Study','MetaDat']] ):
+def n_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_size = []
     tot_size =0
     for s in studies:
@@ -29,25 +29,25 @@ def n_meta( studies : List[Tuple['Study','MetaDat']] ):
 
     return scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
 
-def inv_var_meta( studies : List[Tuple['Study','MetaDat']] ):
+def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
 
     effs_inv_var = []
     tot_se = 0
     for s in studies:
         study = s[0]
         dat = s[1]
-
+        print(study)
+        print(dat)
         if dat.se is None or dat.se==0:
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
             break
         var = (dat.se * dat.se)
 
         tot_se+=1/var
-        effs_inv_var.append(var *  dat.beta )
+        effs_inv_var.append( (1/var) *  dat.beta )
+    return 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) if len(effs_inv_var)==len(studies) else None
 
-    return scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) if len(effs_inv_var)==len(studies) else None
-
-def variance_weight_meta( studies : List[Tuple['Study','MetaDat']] ):
+def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_se = []
     tot_se = 0
 
@@ -82,7 +82,7 @@ def is_symmetric(a1, a2):
 
 
 
-class MetaDat:
+class VariantData:
 
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
@@ -98,13 +98,21 @@ class MetaDat:
             self.se = None
 
         self.extra_cols = extra_cols
+
     def __eq__(self, other):
 
         return self.chr == other.chr and self.pos == other.pos and self.ref == other.ref and self.alt == other.alt
 
-    def equalize(self, other:'MetaDat') -> bool:
+    def __lt__(self, other):
+
+        return (  (self.chr==other.chr and self.pos<other.pos)
+                  or (self.chr==other.chr and self.pos == other.pos and self.ref < self.alt)
+                  or (self.chr < other.chr)
+               )
+
+    def equalize_to(self, other:'VariantData') -> bool:
         """
-            Checks if this metadata is the same variant (possibly different strand or ordering of alleles)
+            Checks if this VariantData is the same variant (possibly different strand or ordering of alleles)
             returns: true if the same (flips effect direction and ref/alt alleles if necessary) or false if not the same variant
         """
 
@@ -112,9 +120,8 @@ class MetaDat:
             flip_ref =  flip_strand(other.ref)
             flip_alt =  flip_strand(other.alt)
 
-
             if is_symmetric( other.ref, other.alt ):
-                ## never strandflip symmetrics
+                ## never strandflip symmetrics. Assumed to be aligned.
                 if self.ref == other.ref and self.alt == other.alt:
                     return True
                 elif self.ref == other.alt and self.alt == other.ref:
@@ -228,7 +235,7 @@ class Study:
     def has_std_err(self):
         return "se" in self.conf
 
-    def get_next_data(self, just_one =False) -> List[MetaDat]:
+    def get_next_data(self, just_one =False) -> List[VariantData]:
         """
             Returns a list of variants. List containts >1 elements if they are on the same position and just_one ==False.
             args:
@@ -279,7 +286,7 @@ class Study:
             chr = chrord[chr]
             extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
 
-            v = MetaDat(chr,pos,ref,alt, eff, pval, se, extracols)
+            v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
 
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 vars.append(v )
@@ -295,13 +302,13 @@ class Study:
     def extra_cols(self):
         return self.conf["extra_cols"]
 
-    def get_match(self, dat: MetaDat) -> MetaDat:
+    def get_match(self, dat: VariantData) -> VariantData:
         """
             Reads current study until variant in 'dat' is reached or overtaken in chr pos orded.
-            IF matching variant found (can flip alleles) the matching MetaDat(effect flipped if alleles flipped) is returned.
+            IF matching variant found (can flip alleles) the matching VariantData(effect flipped if alleles flipped) is returned.
             input:
                 dat: the variant to look for
-            output: matching MetaDat in this study or None if no match.
+            output: matching VariantData in this study or None if no match.
         """
 
         otherdats = self.get_next_data( )
@@ -320,7 +327,7 @@ class Study:
             return None
 
         for i,v in enumerate(otherdats):
-            if v.equalize(dat):
+            if v.equalize_to(dat):
                 del otherdats[i]
                 self.put_back(otherdats)
                 return v
@@ -330,8 +337,8 @@ class Study:
         return None
 
 
-    def put_back(self, metadat):
-        for m in metadat:
+    def put_back(self, VariantData):
+        for m in VariantData:
             ## the future in next position will be always kept last
             self.future.appendleft(m)
 
@@ -346,23 +353,62 @@ def get_studies(conf:str) -> List[Study]:
 
     return [ Study(s) for s in studies_conf["meta"]]
 
-def do_meta(study_list: List[ Tuple[Study, MetaDat]], methods: List[str] ) -> List[float] :
+def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -> List[float] :
     '''
         Computes meta-analysis between all studies and data given in the std_list
         input:
             study_list: studies and data in tuples
         output:
-            tuple in which first element is effective sample size weighted meta, second is std err weighted meta and 3rd is inverse variance weighted meta.
-            2nd and 3rd elements are none if all studies did not have optional std err defined
+            list of p-values for each method in the same order as methods were given
     '''
     return [ SUPPORTED_METHODS[m](study_list) for m in methods ]
 
 def format_num(num, precision=2):
     return numpy.format_float_scientific(num, precision=precision) if num is not None else "NA"
 
+def get_next_variant( studies : List[Study]) -> List[VariantData]:
+    '''
+        get variant data for all studies.
+        The variant data is the first in chromosomal order across studies (ties broken by alphabetic order of ref)
+        input:
+            study_list: studies and data in tuples
+        output:
+            List of VariantData objects. The list is in the same order as the input studies. If smallest variant is
+            not found in a study, that position in the list will be Null
+    '''
+
+    dats = []
+    first = None
+    for s in studies:
+        d = s.get_next_data()
+        dats.append(d)
+
+        if d is not None:
+            for v in d:
+                if first is None or v < first:
+                    first = v
+
+    res = []
+    for i,s in enumerate(studies):
+
+        if dats[i] is None:
+            res.append(None)
+            continue
+
+        for v in dats[i]:
+            if v.equalize_to(first):
+                res.append(v)
+            else:
+                s.put_back([v])
+        if len(res)<i+1:
+            res.append(None)
+
+    return res
+
+
+
 def run():
     '''
-        This module generates matrix from external single association results for fast access to browsingself.
         First parameter should be a path to a json configuration file with these elements:
             "name":"FINNGEN",
             "file":"/Users/mitja/projects/finngen/META_ANALYSIS/I9_AF.gz",
@@ -379,7 +425,7 @@ def run():
         Second parameter should be a path to (empty/not existing) directory where the data should be stored
     '''
 
-    parser = argparse.ArgumentParser(description="Create tabixed big matrix for external results")
+    parser = argparse.ArgumentParser(description="Run x-way meta-analysis")
     parser.add_argument('config_file', action='store', type=str, help='Configuration file ')
     parser.add_argument('path_to_res', action='store', type=str, help='Result file')
 
@@ -391,7 +437,6 @@ def run():
     studs = get_studies(args.config_file)
 
     methods = []
-
 
     for m in args.methods.split(","):
         if m not in SUPPORTED_METHODS:
@@ -423,29 +468,33 @@ def run():
             out.write("\tall_"+  m +"_meta_p")
         out.write("\n")
 
-        d = studs[0].get_next_data(just_one = True)
-        while d is not None:
+        next_var = get_next_variant(studs)
+        matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
-            ## only one variant read at a time from matched study
-            d = d[0]
-            matching_studies = [ (studs[0],d) ]
-            outdat = [ d.chr, d.pos, d.ref, d.alt,format_num(d.beta), format_num(d.pval)  ]
-            outdat.extend([ c for c in d.extra_cols ])
-            for oth in studs[1:len(studs)]:
-                match_dat = oth.get_match(d)
+        while len(matching_studies)>0:
 
-                if match_dat is not None:
-                    matching_studies.append( (oth,match_dat) )
-                    met = do_meta( [(studs[0],d), (oth,match_dat)], methods=methods )
-                    outdat.extend([format_num(match_dat.beta), format_num(match_dat.pval) ])
-                    outdat.extend([ c for c in match_dat.extra_cols ])
+            d = matching_studies[0][1]
+            outdat = [ d.chr, d.pos, d.ref, d.alt]
 
-                    for m in met:
-                        outdat.append(format_num(m))
+            for i,_ in enumerate(studs):
+                if next_var[i] is not None:
+                    outdat.extend([format_num(next_var[i].beta), format_num(next_var[i].pval) ])
+                    outdat.extend([ c for c in next_var[i].extra_cols ])
+
+                    # meta analyse pairwise only with the leftmost study
+                    if i==0:
+                        continue
+
+                    if next_var[0] is not None:
+                        met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
+                        for m in met:
+                            outdat.append(format_num(m))
+                    else:
+                        outdat.append("NA" * len(methods))
                 else:
-                    outdat.extend(['NA']  * (2 + len(oth.extra_cols) + len(methods) ) )
+                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods) if i>0 else 0) ) )
 
-            if len(matching_studies)>1:
+            if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods )
                 outdat.append( str(len(matching_studies)) )
 
@@ -453,11 +502,16 @@ def run():
                     outdat.append( format_num(m) )
 
             else:
-                outdat.extend(["NA"] *  len(methods) )
+                outdat.append("1")
+                outdat.extend( [format_num(matching_studies[0][1].pval)]  * len(methods) )
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
-            d = studs[0].get_next_data(just_one = True)
+            next_var = get_next_variant(studs)
+            print("NEXT VARIANTS")
+            print(next_var[0])
+            print(next_var[1])
+            matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
     subprocess.run(["bgzip","--force",args.path_to_res])
     subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res + ".gz"])
