@@ -27,7 +27,7 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ):
         effs_size.append( math.sqrt(study.effective_size) * numpy.sign(dat.beta) * dat.z_score)
         tot_size+=study.effective_size
 
-    return scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
+    return 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
 
@@ -36,8 +36,6 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
     for s in studies:
         study = s[0]
         dat = s[1]
-        print(study)
-        print(dat)
         if dat.se is None or dat.se==0:
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
             break
@@ -61,7 +59,7 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
 
         effs_se.append( (1/dat.se) * numpy.sign(dat.beta) * dat.z_score )
         tot_se+=1/ (dat.se * dat.se)
-    return scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) if len(effs_se)==len(studies) else None
+    return 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) if len(effs_se)==len(studies) else None
 
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
