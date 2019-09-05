@@ -117,7 +117,10 @@ class VariantData:
         if (self.chr == other.chr and self.pos == other.pos):
             flip_ref =  flip_strand(other.ref)
             flip_alt =  flip_strand(other.alt)
-
+            
+            if self.ref== other.ref and self.alt == other.alt :
+                    return True
+            
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics. Assumed to be aligned.
                 if self.ref == other.ref and self.alt == other.alt:
@@ -128,17 +131,24 @@ class VariantData:
                     self.alt = self.ref
                     self.ref = t
                     return True
-
-            elif( (self.ref == other.ref or self.ref==flip_ref) and (self.alt == other.alt or self.alt == flip_alt)):
-                return True
-            elif (self.ref == other.alt or self.ref == flip_alt) and (self.alt == other.ref or self.alt==flip_alt ) :
+            
+            elif (self.ref == other.alt and self.alt == other.ref) :
                 self.beta = -1 * self.beta if self.beta is not None else None
                 t = self.alt
                 self.alt = self.ref
                 self.ref = t
                 return True
-            else:
-                return False
+            elif (self.ref == flip_ref and self.alt==flip_alt):
+                self.ref = flip_strand(self.ref)
+                self.alt = flip_strand(self.alt)
+                return True
+            elif (self.ref == flip_alt and self.alt==flip_ref):
+                self.beta = -1 * self.beta if self.beta is not None else None
+                self.ref =flip_strand(self.alt)
+                self.alt = flip_strand(self.ref)
+                return True
+
+        return False
 
     @property
     def z_score(self):
