@@ -21,18 +21,23 @@ chrord.update({str(chr):int(chr) for chr in list(range(1,23)) } )
 def n_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_size = []
     tot_size =0
+    sum_betas=0
+    sum_weights=0
     for s in studies:
         study = s[0]
         dat = s[1]
         effs_size.append( math.sqrt(study.effective_size) * numpy.sign(dat.beta) * dat.z_score)
+        sum_weights+= math.sqrt(study.effective_size) 
+        sum_betas+=math.sqrt(study.effective_size) * dat.beta
         tot_size+=study.effective_size
 
-    return 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
+    return ( sum_betas/ sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ))
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
 
     effs_inv_var = []
     tot_se = 0
+    sum_inv_var=0
     for s in studies:
         study = s[0]
         dat = s[1]
@@ -42,13 +47,16 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
         var = (dat.se * dat.se)
 
         tot_se+=1/var
-        effs_inv_var.append( (1/var) *  dat.beta )
-    return 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) if len(effs_inv_var)==len(studies) else None
+        inv_var =  (1/var)
+        sum_inv_var+=inv_var
+        effs_inv_var.append( inv_var *  dat.beta )
+    return (sum(effs_inv_var)/ sum_inv_var, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) ) if len(effs_inv_var)==len(studies) else None
 
 def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_se = []
     tot_se = 0
-
+    sum_weights=0
+    sum_betas=0
     for s in studies:
         study = s[0]
         dat = s[1]
@@ -56,10 +64,12 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
         if dat.se is None or dat.se==0:
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
             break
-
-        effs_se.append( (1/dat.se) * numpy.sign(dat.beta) * dat.z_score )
+        weight =  (1/dat.se) * dat.z_score
+        sum_weights+=weight
+        sum_betas+= weight * dat.beta
+        effs_se.append( weight * numpy.sign(dat.beta)  )
         tot_se+=1/ (dat.se * dat.se)
-    return 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) if len(effs_se)==len(studies) else None
+    return ( sum_betas / sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) ) if len(effs_se)==len(studies) else None
 
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
@@ -367,7 +377,7 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -
         input:
             study_list: studies and data in tuples
         output:
-            list of p-values for each method in the same order as methods were given
+            list of  tuples (effect_size, p-value) for each method in the same order as methods were given
     '''
     return [ SUPPORTED_METHODS[m](study_list) for m in methods ]
 
@@ -376,7 +386,7 @@ def format_num(num, precision=2):
 
 def get_next_variant( studies : List[Study]) -> List[VariantData]:
     '''
-        get variant data for all studies.
+        get variant data for all studies
         The variant data is the first in chromosomal order across studies (ties broken by alphabetic order of ref)
         input:
             study_list: studies and data in tuples
@@ -469,11 +479,11 @@ def run():
             out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
 
             for m in methods:
-                out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
+                out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
 
         out.write("\tall_meta_N")
         for m in methods:
-            out.write("\tall_"+  m +"_meta_p")
+            out.write("\tall_"+m+"_meta_beta\tall_"+  m +"_meta_p")
         out.write("\n")
 
         next_var = get_next_variant(studs)
@@ -496,22 +506,24 @@ def run():
                     if next_var[0] is not None:
                         met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
                         for m in met:
-                            outdat.append(format_num(m))
+                            outdat.append(str(m[0]))
+                            outdat.append(format_num(m[1]))
                     else:
-                        outdat.append("NA" * len(methods))
+                        outdat.extend(["NA"] * len(methods) * 2)
                 else:
-                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods) if i>0 else 0) ) )
+                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods)*2 if i>0 else 0) ) )
 
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods )
                 outdat.append( str(len(matching_studies)) )
 
                 for m in met:
-                    outdat.append( format_num(m) )
+                    outdat.append( m[0] )
+                    outdat.append( format_num(m[1]) )
 
             else:
                 outdat.append("1")
-                outdat.extend( [format_num(matching_studies[0][1].pval)]  * len(methods) )
+                outdat.extend( [matching_studies[0][1].beta,format_num(matching_studies[0][1].pval)]  * len(methods) )
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
