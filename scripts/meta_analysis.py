@@ -11,12 +11,15 @@ import numpy
 from typing import Dict, Tuple, List
 import subprocess
 from collections import deque
+import re
 
 chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
 chrord["chrX"] = 23
 chrord["chrY"] = 24
 chrord["chrMT"] = 25
 chrord.update({str(chr):int(chr) for chr in list(range(1,23)) } )
+
+re_allele = re.compile('^[ATCG]+$')
 
 def n_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_size = []
@@ -270,24 +273,26 @@ class Study:
         vars = list()
         while True:
             chr = None
+            ref = None
+            alt = None
             l = None
-            ## loop ignoring  alternate contigs for now.
-            while chr is None or chr not in chrord:
+            ## loop ignoring  alternate contigs and non-ATCG alleles for now.
+            while chr is None or chr not in chrord or re_allele.match(ref) is None or re_allele.match(alt) is None:
                 l = self.conf["fpoint"].readline()
                 if l=="":
                     return None
 
                 l = l.rstrip().split("\t")
                 chr = l[self.conf["h_idx"]["chr"]]
+                ref = l[self.conf["h_idx"]["ref"]]
+                alt = l[self.conf["h_idx"]["alt"]]
 
             pos = l[self.conf["h_idx"]["pos"]]
-            ref = l[self.conf["h_idx"]["ref"]]
-            alt = l[self.conf["h_idx"]["alt"]]
             eff = l[self.conf["h_idx"]["effect"]]
             pval = l[self.conf["h_idx"]["pval"]]
 
             pos = int(pos)
-
+            
             se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
             effect_type = self.conf["effect_type"]
@@ -307,7 +312,13 @@ class Study:
             v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
 
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
-                vars.append(v )
+                added=False
+                for v_ in vars:
+                    if v.equalize_to(v_):
+                        print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v))
+                        added=True
+                if not added:
+                    vars.append(v )
                 if just_one:
                     break
             else:
@@ -529,8 +540,8 @@ def run():
 
             next_var = get_next_variant(studs)
             print("NEXT VARIANTS")
-            print(next_var[0])
-            print(next_var[1])
+            for v in next_var:
+                print(v)
             matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
     subprocess.run(["bgzip","--force",args.path_to_res])
