@@ -465,10 +465,10 @@ def run():
     '''
 
     parser = argparse.ArgumentParser(description="Run x-way meta-analysis")
-    parser.add_argument('config_file', action='store', type=str, help='Configuration file ')
-    parser.add_argument('path_to_res', action='store', type=str, help='Result file')
-
-    parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
+    parser.add_argument('--config_file', action='store', type=str, help='Configuration file ')
+    parser.add_argument('--path_to_res', action='store', type=str, help='Result file')
+    parser.add_argument('--do_leave_one_out', action='store_true', help='whether do leave-one-out meta-analysis, default: TRUE')
+    parser.add_argument('--methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
             + 'Allowed values [n,inv_var,variance]', default="inv_var")
 
     args = parser.parse_args()
@@ -505,6 +505,12 @@ def run():
         out.write("\tall_meta_N")
         for m in methods:
             out.write("\tall_"+m+"_meta_beta\tall_"+  m +"_meta_p")
+
+        if args.do_leave_one_out:
+            for m in methods:
+                for oth in studs[0:len(studs)]:
+                    out.write( "\t" +  "\t".join( ["leave_"+oth.name + "_" + m +"_meta_N",  "leave_"+oth.name + "_" + m +"_meta_beta", "leave_"+oth.name + "_" + m + "_meta_p"] ))
+
         out.write("\n")
 
         next_var = get_next_variant(studs)
@@ -546,10 +552,35 @@ def run():
                 outdat.append("1")
                 outdat.extend( [matching_studies[0][1].beta,format_num(matching_studies[0][1].pval)]  * len(methods) )
 
+
+            if args.do_leave_one_out:
+                studs_k = studs.copy()
+                next_var_k = next_var.copy()
+                #matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
+                for k,_ in enumerate(studs):
+                    del studs_k[0]
+                    #next_var_k = get_next_variant(studs_k)
+                    del next_var_k[0]
+                    matching_studies_k = [(studs_k[i],v) for i,v in enumerate(next_var_k) if v is not None]
+                        
+                    if len( matching_studies_k )>1:
+                        met_k = do_meta( matching_studies_k, methods=methods )
+                        outdat.append( str(len(matching_studies_k)) )
+                        for m_k in met_k:
+                            outdat.append( m_k[0] )
+                            outdat.append( format_num(m_k[1]) )
+
+                    else:
+                        outdat.append("1")
+                        outdat.extend(["NA"] * len(methods) * 2)
+                        #outdat.extend( [matching_studies_k[0][1].beta,format_num(matching_studies_k[0][1].pval)]  * len(methods) )
+
+
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
             next_var = get_next_variant(studs)
             print("NEXT VARIANTS")
+
             for v in next_var:
                 print(v)
             matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
