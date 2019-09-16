@@ -183,7 +183,7 @@ class Study:
     REQUIRED_CONF = {"name":str,"file":str, "n_cases": int, "n_controls":int,
     "chr":str,"pos":str,"ref":str,"alt":str, "effect":str,
     "effect_type":check_eff_field,
-    "pval":str}
+    "pval":str, "delimiter":str}
 
     OPTIONAL_FIELDS = {"se":str}
 
@@ -213,7 +213,12 @@ class Study:
                     " in configuration: " + str(s) + ". ERR:" + str(e))
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
-        header = conf["fpoint"].readline().rstrip().split("\t")
+#        header = conf["fpoint"].readline().rstrip().split("\t")
+        if self.conf["delimiter"] == "TAB":
+            header = conf["fpoint"].readline().rstrip().split("\t")
+        elif self.conf["delimiter"] == "SPACE":
+            header = conf["fpoint"].readline().rstrip().split(" ")
+
 
         for k in Study.REQUIRED_DATA_FIELDS.keys():
             if self.conf[k] not in header:
@@ -282,7 +287,12 @@ class Study:
                 if l=="":
                     return None
 
-                l = l.rstrip().split("\t")
+                #l = l.rstrip().split("\t")
+                if self.conf["delimiter"] == "TAB":
+                    l = l.rstrip().split("\t")
+                elif self.conf["delimiter"] == "SPACE":
+                    l = l.rstrip().split(" ")
+
                 chr = l[self.conf["h_idx"]["chr"]]
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
