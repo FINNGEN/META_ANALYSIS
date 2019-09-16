@@ -467,7 +467,8 @@ def run():
     parser = argparse.ArgumentParser(description="Run x-way meta-analysis")
     parser.add_argument('--config_file', action='store', type=str, help='Configuration file ')
     parser.add_argument('--path_to_res', action='store', type=str, help='Result file')
-    parser.add_argument('--do_leave_one_out', action='store_true', help='whether do leave-one-out meta-analysis, default: TRUE')
+    parser.add_argument('--do_leave_one_out', action='store_true', help='whether do leave-one-out meta-analysis, default: FALSE')
+    parser.add_argument('--do_pairwise_with_leftmost', action='store_true', help='whether do pairwise meta-analysis with the leftmost study, default: FALSE')
     parser.add_argument('--methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
             + 'Allowed values [n,inv_var,variance]', default="inv_var")
 
@@ -499,6 +500,7 @@ def run():
             out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval"] ))
             out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
 
+        if args.do_pairwise_with_leftmost:
             for m in methods:
                 out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
 
@@ -525,18 +527,19 @@ def run():
                 if next_var[i] is not None:
                     outdat.extend([format_num(next_var[i].beta), format_num(next_var[i].pval) ])
                     outdat.extend([ c for c in next_var[i].extra_cols ])
-
+                    
                     # meta analyse pairwise only with the leftmost study
-                    if i==0:
-                        continue
+                    if args.do_pairwise_with_leftmost:                  
+                        if i==0:
+                            continue
 
-                    if next_var[0] is not None:
-                        met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
-                        for m in met:
-                            outdat.append(str(m[0]))
-                            outdat.append(format_num(m[1]))
-                    else:
-                        outdat.extend(["NA"] * len(methods) * 2)
+                        if next_var[0] is not None:
+                            met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
+                            for m in met:
+                                outdat.append(str(m[0]))
+                                outdat.append(format_num(m[1]))
+                        else:
+                            outdat.extend(["NA"] * len(methods) * 2)
                 else:
                     outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods)*2 if i>0 else 0) ) )
 
