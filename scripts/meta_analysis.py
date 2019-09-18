@@ -121,9 +121,39 @@ class VariantData:
                   or (self.chr < other.chr)
                )
 
-    def equalize_to(self, other:'VariantData') -> bool:
+    def is_equal(self, other:'VariantData') -> bool:
         """
             Checks if this VariantData is the same variant (possibly different strand or ordering of alleles)
+            returns: true if the same (flips effect direction and ref/alt alleles if necessary) or false if not the same variant
+        """
+
+        if (self.chr == other.chr and self.pos == other.pos):
+            flip_ref =  flip_strand(other.ref)
+            flip_alt =  flip_strand(other.alt)
+            
+            if self.ref== other.ref and self.alt == other.alt :
+                return True
+            
+            if is_symmetric( other.ref, other.alt ):
+                ## never strandflip symmetrics. Assumed to be aligned.
+                if self.ref == other.ref and self.alt == other.alt:
+                    return True
+                elif self.ref == other.alt and self.alt == other.ref:
+                    return True
+            
+            elif (self.ref == other.alt and self.alt == other.ref) :
+                return True
+            elif (self.ref == flip_ref and self.alt==flip_alt):
+                return True
+            elif (self.ref == flip_alt and self.alt==flip_ref):
+                return True
+
+        return False
+
+    def equalize_to(self, other:'VariantData') -> bool:
+        """
+            Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles)
+            If it is, changes this variant's alleles and beta accordingly
             returns: true if the same (flips effect direction and ref/alt alleles if necessary) or false if not the same variant
         """
 
@@ -314,7 +344,7 @@ class Study:
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 added=False
                 for v_ in vars:
-                    if v.equalize_to(v_):
+                    if v.is_equal(v_):
                         print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v))
                         added=True
                 if not added:
@@ -461,6 +491,9 @@ def run():
     parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
             + 'Allowed values [n,inv_var,variance]', default="inv_var")
 
+    parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
+    parser.set_defaults(quiet=True)
+
     args = parser.parse_args()
 
     studs = get_studies(args.config_file)
@@ -539,9 +572,10 @@ def run():
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
             next_var = get_next_variant(studs)
-            print("NEXT VARIANTS")
-            for v in next_var:
-                print(v)
+            if not args.quiet:
+                print("NEXT VARIANTS")
+                for v in next_var:
+                    print(v)
             matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
     subprocess.run(["bgzip","--force",args.path_to_res])
