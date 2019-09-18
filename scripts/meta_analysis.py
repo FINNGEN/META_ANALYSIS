@@ -124,7 +124,7 @@ class VariantData:
     def is_equal(self, other:'VariantData') -> bool:
         """
             Checks if this VariantData is the same variant (possibly different strand or ordering of alleles)
-            returns: true if the same (flips effect direction and ref/alt alleles if necessary) or false if not the same variant
+            returns: true if the same false if not
         """
 
         if (self.chr == other.chr and self.pos == other.pos):
@@ -225,13 +225,13 @@ class Study:
         for v in Study.REQUIRED_CONF:
             if v not in self.conf:
                 raise Exception("Meta configuration for study must contain required elements: "
-                    + ",".join(Study.REQUIRED_CONF.keys() ) + ". Offending configuration: " + str(s))
+                    + ",".join(Study.REQUIRED_CONF.keys() ) + ". Offending configuration: " + str(self.conf))
 
             try:
                 self.conf[v] = Study.REQUIRED_CONF[v](self.conf[v])
             except Exception as e:
-                raise Exception("Illegal data type in configuration for field " + s[v] +
-                    " in configuration: " + str(s) + ". ERR:" + str(e))
+                raise Exception("Illegal data type in configuration for field " + str(v) +
+                    " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         for v in Study.OPTIONAL_FIELDS:
             if v not in self.conf:
@@ -239,8 +239,8 @@ class Study:
             try:
                 self.conf[v] = Study.OPTIONAL_FIELDS[v](self.conf[v])
             except Exception as e:
-                raise Exception("Illegal data type in configuration for field " + s[v] +
-                    " in configuration: " + str(s) + ". ERR:" + str(e))
+                raise Exception("Illegal data type in configuration for field " + v +
+                    " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
         header = conf["fpoint"].readline().rstrip().split("\t")
@@ -494,6 +494,12 @@ def run():
     parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
     parser.set_defaults(quiet=True)
 
+    parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
+    parser.set_defaults(leave_one_out=False)
+
+    parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
+    parser.set_defaults(pairwise_with_first=False)
+
     args = parser.parse_args()
 
     studs = get_studies(args.config_file)
@@ -522,12 +528,20 @@ def run():
             out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval"] ))
             out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
 
-            for m in methods:
-                out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
+            if args.pairwise_with_first:
+                for m in methods:
+                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
 
         out.write("\tall_meta_N")
         for m in methods:
             out.write("\tall_"+m+"_meta_beta\tall_"+  m +"_meta_p")
+
+        if args.leave_one_out:
+            for s in studs:
+                out.write("\t" + "leave_" + s.name + "_N")
+                for m in methods:
+                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_p"] ))
+            
         out.write("\n")
 
         next_var = get_next_variant(studs)
@@ -544,31 +558,43 @@ def run():
                     outdat.extend([ c for c in next_var[i].extra_cols ])
 
                     # meta analyse pairwise only with the leftmost study
-                    if i==0:
+                    if not args.pairwise_with_first or i==0:
                         continue
 
                     if next_var[0] is not None:
                         met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
                         for m in met:
-                            outdat.append(str(m[0]))
+                            outdat.append(format_num(m[0]))
                             outdat.append(format_num(m[1]))
                     else:
                         outdat.extend(["NA"] * len(methods) * 2)
                 else:
-                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods)*2 if i>0 else 0) ) )
+                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods)*2 if args.pairwise_with_first and i>0 else 0) ) )
 
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods )
                 outdat.append( str(len(matching_studies)) )
 
                 for m in met:
-                    outdat.append( m[0] )
+                    outdat.append( format_num(m[0]) )
                     outdat.append( format_num(m[1]) )
 
             else:
                 outdat.append("1")
-                outdat.extend( [matching_studies[0][1].beta,format_num(matching_studies[0][1].pval)]  * len(methods) )
+                outdat.extend( [format_num(matching_studies[0][1].beta),format_num(matching_studies[0][1].pval)]  * len(methods) )
 
+            if args.leave_one_out:
+                for s,_ in enumerate(studs):
+                    matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
+                    outdat.append( str(len(matching_studies_loo)) )
+                    if len(matching_studies_loo) > 1:
+                        met = do_meta( matching_studies_loo, methods=methods )
+                        for m in met:
+                            outdat.append( format_num(m[0]) )
+                            outdat.append( format_num(m[1]) )
+                    else:
+                        outdat.extend(['NA'] * 2 * len(methods))
+                
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
             next_var = get_next_variant(studs)
