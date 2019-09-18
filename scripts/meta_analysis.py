@@ -217,8 +217,9 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf):
+    def __init__(self, conf, dont_allow_space):
         self.conf =conf
+        self.dont_allow_space = dont_allow_space
         self.future = deque()
         self.eff_size= None
         self.z_scr = None
@@ -243,8 +244,11 @@ class Study:
                     " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
-        header = conf["fpoint"].readline().rstrip().split()
-
+        if self.dont_allow_space:
+            header = conf["fpoint"].readline().rstrip().split('\t')
+        else:
+            header = conf["fpoint"].readline().rstrip().split()
+        
         for k in Study.REQUIRED_DATA_FIELDS.keys():
             if self.conf[k] not in header:
                 raise Exception("Required headers not in data in study " + self.conf["name"] + ". Missing:" + ",".join([ self.conf[k] for k in Study.REQUIRED_DATA_FIELDS.keys() if self.conf[k] not in header])  )
@@ -312,7 +316,11 @@ class Study:
                 if l=="":
                     return None
 
-                l = l.rstrip().split()
+                if self.dont_allow_space:
+                    l = l.rstrip().split('\t')
+                else:
+                    l = l.rstrip().split()
+                    
                 chr = l[self.conf["h_idx"]["chr"]]
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
@@ -402,7 +410,7 @@ class Study:
             self.future.appendleft(m)
 
 
-def get_studies(conf:str) -> List[Study]:
+def get_studies(conf:str, dont_allow_space) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
     """
@@ -410,7 +418,7 @@ def get_studies(conf:str) -> List[Study]:
     studies_conf = json.load(open(conf,'r'))
     std_list = studies_conf["meta"]
 
-    return [ Study(s) for s in studies_conf["meta"]]
+    return [ Study(s, dont_allow_space) for s in studies_conf["meta"]]
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -> List[float] :
     '''
@@ -500,9 +508,12 @@ def run():
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
     parser.set_defaults(pairwise_with_first=False)
 
+    parser.add_argument('--dont_allow_space', action='store_true', help='Do pairwise meta-analysis with the first given study')
+    parser.set_defaults(dont_allow_space=False)
+
     args = parser.parse_args()
 
-    studs = get_studies(args.config_file)
+    studs = get_studies(args.config_file, args.dont_allow_space)
 
     methods = []
 
