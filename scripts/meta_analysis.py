@@ -243,7 +243,7 @@ class Study:
                     " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
-        header = conf["fpoint"].readline().rstrip().split("\t")
+        header = conf["fpoint"].readline().rstrip().split()
 
         for k in Study.REQUIRED_DATA_FIELDS.keys():
             if self.conf[k] not in header:
@@ -312,7 +312,7 @@ class Study:
                 if l=="":
                     return None
 
-                l = l.rstrip().split("\t")
+                l = l.rstrip().split()
                 chr = l[self.conf["h_idx"]["chr"]]
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
