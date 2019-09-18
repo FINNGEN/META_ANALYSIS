@@ -97,7 +97,7 @@ class VariantData:
 
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
-        self.pos = int(pos)
+        self.pos = int(float(pos))
         self.ref = ref.strip()
         self.alt = alt.strip()
         self.beta = beta
@@ -329,7 +329,7 @@ class Study:
             eff = l[self.conf["h_idx"]["effect"]]
             pval = l[self.conf["h_idx"]["pval"]]
 
-            pos = int(pos)
+            pos = int(float(pos))
             
             se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
