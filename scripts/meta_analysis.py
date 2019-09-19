@@ -117,7 +117,6 @@ class VariantData:
     def __lt__(self, other):
 
         return (  (self.chr==other.chr and self.pos<other.pos)
-                  or (self.chr==other.chr and self.pos == other.pos and self.ref < self.alt)
                   or (self.chr < other.chr)
                )
 
@@ -556,6 +555,10 @@ def run():
         out.write("\n")
 
         next_var = get_next_variant(studs)
+        if not args.quiet:
+            print("NEXT VARIANTS")
+            for v in next_var:
+                print(v)
         matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
         while len(matching_studies)>0:
