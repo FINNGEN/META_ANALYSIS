@@ -98,8 +98,8 @@ class VariantData:
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
         self.pos = int(float(pos))
-        self.ref = ref.strip()
-        self.alt = alt.strip()
+        self.ref = ref.strip().upper()
+        self.alt = alt.strip().upper()
         self.beta = beta
         self.pval = pval
         self.z_scr = None
