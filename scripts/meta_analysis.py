@@ -216,8 +216,9 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf, dont_allow_space):
+    def __init__(self, conf, chrom, dont_allow_space):
         self.conf =conf
+        self.chrom = chrom
         self.dont_allow_space = dont_allow_space
         self.future = deque()
         self.eff_size= None
@@ -302,7 +303,7 @@ class Study:
             for i,v in reversed(f):
                  del self.future[i]
             return [ v for i,v in f ]
-
+        
         vars = list()
         while True:
             chr = None
@@ -310,7 +311,7 @@ class Study:
             alt = None
             l = None
             ## loop ignoring  alternate contigs and non-ATCG alleles for now.
-            while chr is None or chr not in chrord or re_allele.match(ref) is None or re_allele.match(alt) is None:
+            while chr is None or chr not in chrord or (self.chrom is not None and chr != self.chrom) or re_allele.match(ref) is None or re_allele.match(alt) is None:
                 l = self.conf["fpoint"].readline()
                 if l=="":
                     return None
@@ -320,7 +321,7 @@ class Study:
                 else:
                     l = l.rstrip().split()
                     
-                chr = l[self.conf["h_idx"]["chr"]]
+                chr = l[self.conf["h_idx"]["chr"]].replace("chr", "")
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
 
@@ -409,7 +410,7 @@ class Study:
             self.future.appendleft(m)
 
 
-def get_studies(conf:str, dont_allow_space) -> List[Study]:
+def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
     """
@@ -417,7 +418,7 @@ def get_studies(conf:str, dont_allow_space) -> List[Study]:
     studies_conf = json.load(open(conf,'r'))
     std_list = studies_conf["meta"]
 
-    return [ Study(s, dont_allow_space) for s in studies_conf["meta"]]
+    return [ Study(s, chrom, dont_allow_space) for s in studies_conf["meta"]]
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -> List[float] :
     '''
@@ -505,14 +506,13 @@ def run():
     parser.set_defaults(leave_one_out=False)
 
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.set_defaults(pairwise_with_first=False)
-
     parser.add_argument('--dont_allow_space', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.set_defaults(dont_allow_space=False)
+
+    parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
 
     args = parser.parse_args()
 
-    studs = get_studies(args.config_file, args.dont_allow_space)
+    studs = get_studies(args.config_file, args.chrom, args.dont_allow_space)
 
     methods = []
 
