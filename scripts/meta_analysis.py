@@ -97,9 +97,9 @@ class VariantData:
 
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
-        self.pos = int(pos)
-        self.ref = ref.strip()
-        self.alt = alt.strip()
+        self.pos = int(float(pos))
+        self.ref = ref.strip().upper()
+        self.alt = alt.strip().upper()
         self.beta = beta
         self.pval = pval
         self.z_scr = None
@@ -117,7 +117,6 @@ class VariantData:
     def __lt__(self, other):
 
         return (  (self.chr==other.chr and self.pos<other.pos)
-                  or (self.chr==other.chr and self.pos == other.pos and self.ref < self.alt)
                   or (self.chr < other.chr)
                )
 
@@ -329,7 +328,7 @@ class Study:
             eff = l[self.conf["h_idx"]["effect"]]
             pval = l[self.conf["h_idx"]["pval"]]
 
-            pos = int(pos)
+            pos = int(float(pos))
             
             se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
@@ -556,6 +555,10 @@ def run():
         out.write("\n")
 
         next_var = get_next_variant(studs)
+        if not args.quiet:
+            print("NEXT VARIANTS")
+            for v in next_var:
+                print(v)
         matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
         while len(matching_studies)>0:
