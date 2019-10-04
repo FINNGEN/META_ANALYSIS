@@ -30,7 +30,7 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ):
         study = s[0]
         dat = s[1]
         effs_size.append( math.sqrt(study.effective_size) * numpy.sign(dat.beta) * dat.z_score)
-        sum_weights+= math.sqrt(study.effective_size) 
+        sum_weights+= math.sqrt(study.effective_size)
         sum_betas+=math.sqrt(study.effective_size) * dat.beta
         tot_size+=study.effective_size
 
@@ -129,17 +129,17 @@ class VariantData:
         if (self.chr == other.chr and self.pos == other.pos):
             flip_ref =  flip_strand(other.ref)
             flip_alt =  flip_strand(other.alt)
-            
+
             if self.ref== other.ref and self.alt == other.alt :
                 return True
-            
+
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics. Assumed to be aligned.
                 if self.ref == other.ref and self.alt == other.alt:
                     return True
                 elif self.ref == other.alt and self.alt == other.ref:
                     return True
-            
+
             elif (self.ref == other.alt and self.alt == other.ref) :
                 return True
             elif (self.ref == flip_ref and self.alt==flip_alt):
@@ -159,10 +159,10 @@ class VariantData:
         if (self.chr == other.chr and self.pos == other.pos):
             flip_ref =  flip_strand(other.ref)
             flip_alt =  flip_strand(other.alt)
-            
+
             if self.ref== other.ref and self.alt == other.alt :
                     return True
-            
+
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics. Assumed to be aligned.
                 if self.ref == other.ref and self.alt == other.alt:
@@ -173,7 +173,7 @@ class VariantData:
                     self.alt = self.ref
                     self.ref = t
                     return True
-            
+
             elif (self.ref == other.alt and self.alt == other.ref) :
                 self.beta = -1 * self.beta if self.beta is not None else None
                 t = self.alt
@@ -247,7 +247,7 @@ class Study:
             header = conf["fpoint"].readline().rstrip().split('\t')
         else:
             header = conf["fpoint"].readline().rstrip().split()
-        
+
         for k in Study.REQUIRED_DATA_FIELDS.keys():
             if self.conf[k] not in header:
                 raise Exception("Required headers not in data in study " + self.conf["name"] + ". Missing:" + ",".join([ self.conf[k] for k in Study.REQUIRED_DATA_FIELDS.keys() if self.conf[k] not in header])  )
@@ -319,7 +319,7 @@ class Study:
                     l = l.rstrip().split('\t')
                 else:
                     l = l.rstrip().split()
-                    
+
                 chr = l[self.conf["h_idx"]["chr"]]
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
@@ -329,7 +329,7 @@ class Study:
             pval = l[self.conf["h_idx"]["pval"]]
 
             pos = int(float(pos))
-            
+
             se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
             effect_type = self.conf["effect_type"]
@@ -530,7 +530,7 @@ def run():
 
     with open( outfile, 'w' ) as out:
 
-        out.write("\t".join(["#CHR","POS","REF","ALT", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
+        out.write("\t".join(["#CHR","POS","REF","ALT","SNP", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
 
         out.write( ("\t" if len(studs[0].extra_cols) else "") + "\t".join( [studs[0].name + "_" + c for c in studs[0].extra_cols] ) )
         ## align to leftmost STUDY
@@ -551,7 +551,7 @@ def run():
                 out.write("\t" + "leave_" + s.name + "_N")
                 for m in methods:
                     out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_p"] ))
-            
+
         out.write("\n")
 
         next_var = get_next_variant(studs)
@@ -565,6 +565,8 @@ def run():
 
             d = matching_studies[0][1]
             outdat = [ d.chr, d.pos, d.ref, d.alt]
+            v = "{}:{}:{}:{}".format(*outdat)
+            outdat.append(v)
 
             for i,_ in enumerate(studs):
                 if next_var[i] is not None:
@@ -608,7 +610,7 @@ def run():
                             outdat.append( format_num(m[1]) )
                     else:
                         outdat.extend(['NA'] * 2 * len(methods))
-                
+
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
             next_var = get_next_variant(studs)
