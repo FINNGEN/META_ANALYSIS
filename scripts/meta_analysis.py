@@ -34,7 +34,7 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_betas+=math.sqrt(study.effective_size) * dat.beta
         tot_size+=study.effective_size
 
-    return ( sum_betas/ sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ))
+    return ( sum_betas/ sum_weights  , max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )))
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
 
@@ -53,7 +53,7 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
         inv_var =  (1/var)
         sum_inv_var+=inv_var
         effs_inv_var.append( inv_var *  dat.beta )
-    return (sum(effs_inv_var)/ sum_inv_var, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) ) if len(effs_inv_var)==len(studies) else None
+    return (sum(effs_inv_var)/ sum_inv_var, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) ))) ) if len(effs_inv_var)==len(studies) else None
 
 def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_se = []
@@ -72,7 +72,7 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_betas+= weight * dat.beta
         effs_se.append( weight * numpy.sign(dat.beta)  )
         tot_se+=1/ (dat.se * dat.se)
-    return ( sum_betas / sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) ) if len(effs_se)==len(studies) else None
+    return ( sum_betas / sum_weights  , max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))) ) if len(effs_se)==len(studies) else None
 
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
