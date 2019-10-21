@@ -11,6 +11,7 @@ import numpy
 from typing import Dict, Tuple, List
 import subprocess
 from collections import deque
+import re
 
 chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
 chrord["chrX"] = 23
@@ -18,21 +19,28 @@ chrord["chrY"] = 24
 chrord["chrMT"] = 25
 chrord.update({str(chr):int(chr) for chr in list(range(1,25)) } )
 
+re_allele = re.compile('^[ATCG]+$', re.IGNORECASE)
+
 def n_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_size = []
     tot_size =0
+    sum_betas=0
+    sum_weights=0
     for s in studies:
         study = s[0]
         dat = s[1]
         effs_size.append( math.sqrt(study.effective_size) * numpy.sign(dat.beta) * dat.z_score)
+        sum_weights+= math.sqrt(study.effective_size)
+        sum_betas+=math.sqrt(study.effective_size) * dat.beta
         tot_size+=study.effective_size
 
-    return 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )
+    return ( sum_betas/ sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ))
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
 
     effs_inv_var = []
     tot_se = 0
+    sum_inv_var=0
     for s in studies:
         study = s[0]
         dat = s[1]
@@ -42,13 +50,16 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
         var = (dat.se * dat.se)
 
         tot_se+=1/var
-        effs_inv_var.append( (1/var) *  dat.beta )
-    return 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) if len(effs_inv_var)==len(studies) else None
+        inv_var =  (1/var)
+        sum_inv_var+=inv_var
+        effs_inv_var.append( inv_var *  dat.beta )
+    return (sum(effs_inv_var)/ sum_inv_var, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) ) if len(effs_inv_var)==len(studies) else None
 
 def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_se = []
     tot_se = 0
-
+    sum_weights=0
+    sum_betas=0
     for s in studies:
         study = s[0]
         dat = s[1]
@@ -56,10 +67,12 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
         if dat.se is None or dat.se==0:
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
             break
-
-        effs_se.append( (1/dat.se) * numpy.sign(dat.beta) * dat.z_score )
+        weight =  (1/dat.se) * dat.z_score
+        sum_weights+=weight
+        sum_betas+= weight * dat.beta
+        effs_se.append( weight * numpy.sign(dat.beta)  )
         tot_se+=1/ (dat.se * dat.se)
-    return 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) if len(effs_se)==len(studies) else None
+    return ( sum_betas / sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) ) if len(effs_se)==len(studies) else None
 
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
@@ -84,9 +97,9 @@ class VariantData:
 
     def __init__(self, chr, pos, ref, alt, beta, pval, se=None, extra_cols=[]):
         self.chr = chr
-        self.pos = int(pos)
-        self.ref = ref.strip()
-        self.alt = alt.strip()
+        self.pos = int(float(pos))
+        self.ref = ref.strip().upper()
+        self.alt = alt.strip().upper()
         self.beta = beta
         self.pval = pval
         self.z_scr = None
@@ -104,19 +117,51 @@ class VariantData:
     def __lt__(self, other):
 
         return (  (self.chr==other.chr and self.pos<other.pos)
-                  or (self.chr==other.chr and self.pos == other.pos and self.ref < self.alt)
                   or (self.chr < other.chr)
                )
 
-    def equalize_to(self, other:'VariantData') -> bool:
+    def is_equal(self, other:'VariantData') -> bool:
         """
             Checks if this VariantData is the same variant (possibly different strand or ordering of alleles)
+            returns: true if the same false if not
+        """
+
+        if (self.chr == other.chr and self.pos == other.pos):
+            flip_ref =  flip_strand(other.ref)
+            flip_alt =  flip_strand(other.alt)
+
+            if self.ref== other.ref and self.alt == other.alt :
+                return True
+
+            if is_symmetric( other.ref, other.alt ):
+                ## never strandflip symmetrics. Assumed to be aligned.
+                if self.ref == other.ref and self.alt == other.alt:
+                    return True
+                elif self.ref == other.alt and self.alt == other.ref:
+                    return True
+
+            elif (self.ref == other.alt and self.alt == other.ref) :
+                return True
+            elif (self.ref == flip_ref and self.alt==flip_alt):
+                return True
+            elif (self.ref == flip_alt and self.alt==flip_ref):
+                return True
+
+        return False
+
+    def equalize_to(self, other:'VariantData') -> bool:
+        """
+            Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles)
+            If it is, changes this variant's alleles and beta accordingly
             returns: true if the same (flips effect direction and ref/alt alleles if necessary) or false if not the same variant
         """
 
         if (self.chr == other.chr and self.pos == other.pos):
             flip_ref =  flip_strand(other.ref)
             flip_alt =  flip_strand(other.alt)
+
+            if self.ref== other.ref and self.alt == other.alt :
+                    return True
 
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics. Assumed to be aligned.
@@ -129,16 +174,23 @@ class VariantData:
                     self.ref = t
                     return True
 
-            elif( (self.ref == other.ref or self.ref==flip_ref) and (self.alt == other.alt or self.alt == flip_alt)):
-                return True
-            elif (self.ref == other.alt or self.ref == flip_alt) and (self.alt == other.ref or self.alt==flip_alt ) :
+            elif (self.ref == other.alt and self.alt == other.ref) :
                 self.beta = -1 * self.beta if self.beta is not None else None
                 t = self.alt
                 self.alt = self.ref
                 self.ref = t
                 return True
-            else:
-                return False
+            elif (self.ref == flip_ref and self.alt==flip_alt):
+                self.ref = flip_strand(self.ref)
+                self.alt = flip_strand(self.alt)
+                return True
+            elif (self.ref == flip_alt and self.alt==flip_ref):
+                self.beta = -1 * self.beta if self.beta is not None else None
+                self.ref =flip_strand(self.alt)
+                self.alt = flip_strand(self.ref)
+                return True
+
+        return False
 
     @property
     def z_score(self):
@@ -164,21 +216,22 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf):
+    def __init__(self, conf, dont_allow_space):
         self.conf =conf
+        self.dont_allow_space = dont_allow_space
         self.future = deque()
         self.eff_size= None
         self.z_scr = None
         for v in Study.REQUIRED_CONF:
             if v not in self.conf:
                 raise Exception("Meta configuration for study must contain required elements: "
-                    + ",".join(Study.REQUIRED_CONF.keys() ) + ". Offending configuration: " + str(s))
+                    + ",".join(Study.REQUIRED_CONF.keys() ) + ". Offending configuration: " + str(self.conf))
 
             try:
                 self.conf[v] = Study.REQUIRED_CONF[v](self.conf[v])
             except Exception as e:
-                raise Exception("Illegal data type in configuration for field " + s[v] +
-                    " in configuration: " + str(s) + ". ERR:" + str(e))
+                raise Exception("Illegal data type in configuration for field " + str(v) +
+                    " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         for v in Study.OPTIONAL_FIELDS:
             if v not in self.conf:
@@ -186,11 +239,14 @@ class Study:
             try:
                 self.conf[v] = Study.OPTIONAL_FIELDS[v](self.conf[v])
             except Exception as e:
-                raise Exception("Illegal data type in configuration for field " + s[v] +
-                    " in configuration: " + str(s) + ". ERR:" + str(e))
+                raise Exception("Illegal data type in configuration for field " + v +
+                    " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
-        header = conf["fpoint"].readline().rstrip().split("\t")
+        if self.dont_allow_space:
+            header = conf["fpoint"].readline().rstrip().split('\t')
+        else:
+            header = conf["fpoint"].readline().rstrip().split()
 
         for k in Study.REQUIRED_DATA_FIELDS.keys():
             if self.conf[k] not in header:
@@ -250,23 +306,29 @@ class Study:
         vars = list()
         while True:
             chr = None
+            ref = None
+            alt = None
             l = None
-            ## loop ignoring  alternate contigs for now.
-            while chr is None or chr not in chrord:
+            ## loop ignoring  alternate contigs and non-ATCG alleles for now.
+            while chr is None or chr not in chrord or re_allele.match(ref) is None or re_allele.match(alt) is None:
                 l = self.conf["fpoint"].readline()
                 if l=="":
                     return None
 
-                l = l.rstrip().split("\t")
+                if self.dont_allow_space:
+                    l = l.rstrip().split('\t')
+                else:
+                    l = l.rstrip().split()
+
                 chr = l[self.conf["h_idx"]["chr"]]
+                ref = l[self.conf["h_idx"]["ref"]]
+                alt = l[self.conf["h_idx"]["alt"]]
 
             pos = l[self.conf["h_idx"]["pos"]]
-            ref = l[self.conf["h_idx"]["ref"]]
-            alt = l[self.conf["h_idx"]["alt"]]
             eff = l[self.conf["h_idx"]["effect"]]
             pval = l[self.conf["h_idx"]["pval"]]
 
-            pos = int(pos)
+            pos = int(float(pos))
 
             se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
@@ -287,7 +349,13 @@ class Study:
             v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
 
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
-                vars.append(v )
+                added=False
+                for v_ in vars:
+                    if v.is_equal(v_):
+                        print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v))
+                        added=True
+                if not added:
+                    vars.append(v )
                 if just_one:
                     break
             else:
@@ -341,7 +409,7 @@ class Study:
             self.future.appendleft(m)
 
 
-def get_studies(conf:str) -> List[Study]:
+def get_studies(conf:str, dont_allow_space) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
     """
@@ -349,7 +417,7 @@ def get_studies(conf:str) -> List[Study]:
     studies_conf = json.load(open(conf,'r'))
     std_list = studies_conf["meta"]
 
-    return [ Study(s) for s in studies_conf["meta"]]
+    return [ Study(s, dont_allow_space) for s in studies_conf["meta"]]
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -> List[float] :
     '''
@@ -357,7 +425,7 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -
         input:
             study_list: studies and data in tuples
         output:
-            list of p-values for each method in the same order as methods were given
+            list of  tuples (effect_size, p-value) for each method in the same order as methods were given
     '''
     return [ SUPPORTED_METHODS[m](study_list) for m in methods ]
 
@@ -366,7 +434,7 @@ def format_num(num, precision=2):
 
 def get_next_variant( studies : List[Study]) -> List[VariantData]:
     '''
-        get variant data for all studies.
+        get variant data for all studies
         The variant data is the first in chromosomal order across studies (ties broken by alphabetic order of ref)
         input:
             study_list: studies and data in tuples
@@ -430,9 +498,21 @@ def run():
     parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
             + 'Allowed values [n,inv_var,variance]', default="inv_var")
 
+    parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
+    parser.set_defaults(quiet=True)
+
+    parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
+    parser.set_defaults(leave_one_out=False)
+
+    parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
+    parser.set_defaults(pairwise_with_first=False)
+
+    parser.add_argument('--dont_allow_space', action='store_true', help='Do pairwise meta-analysis with the first given study')
+    parser.set_defaults(dont_allow_space=False)
+
     args = parser.parse_args()
 
-    studs = get_studies(args.config_file)
+    studs = get_studies(args.config_file, args.dont_allow_space)
 
     methods = []
 
@@ -450,7 +530,7 @@ def run():
 
     with open( outfile, 'w' ) as out:
 
-        out.write("\t".join(["#CHR","POS","REF","ALT", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
+        out.write("\t".join(["#CHR","POS","REF","ALT","SNP", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
 
         out.write( ("\t" if len(studs[0].extra_cols) else "") + "\t".join( [studs[0].name + "_" + c for c in studs[0].extra_cols] ) )
         ## align to leftmost STUDY
@@ -458,21 +538,35 @@ def run():
             out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval"] ))
             out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
 
-            for m in methods:
-                out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
+            if args.pairwise_with_first:
+                for m in methods:
+                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
 
         out.write("\tall_meta_N")
         for m in methods:
-            out.write("\tall_"+  m +"_meta_p")
+            out.write("\tall_"+m+"_meta_beta\tall_"+  m +"_meta_p")
+
+        if args.leave_one_out:
+            for s in studs:
+                out.write("\t" + "leave_" + s.name + "_N")
+                for m in methods:
+                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_p"] ))
+
         out.write("\n")
 
         next_var = get_next_variant(studs)
+        if not args.quiet:
+            print("NEXT VARIANTS")
+            for v in next_var:
+                print(v)
         matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
         while len(matching_studies)>0:
 
             d = matching_studies[0][1]
             outdat = [ d.chr, d.pos, d.ref, d.alt]
+            v = "{}:{}:{}:{}".format(*outdat)
+            outdat.append(v)
 
             for i,_ in enumerate(studs):
                 if next_var[i] is not None:
@@ -480,35 +574,50 @@ def run():
                     outdat.extend([ c for c in next_var[i].extra_cols ])
 
                     # meta analyse pairwise only with the leftmost study
-                    if i==0:
+                    if not args.pairwise_with_first or i==0:
                         continue
 
                     if next_var[0] is not None:
                         met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
                         for m in met:
-                            outdat.append(format_num(m))
+                            outdat.append(format_num(m[0]))
+                            outdat.append(format_num(m[1]))
                     else:
-                        outdat.append("NA" * len(methods))
+                        outdat.extend(["NA"] * len(methods) * 2)
                 else:
-                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods) if i>0 else 0) ) )
+                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods)*2 if args.pairwise_with_first and i>0 else 0) ) )
 
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods )
                 outdat.append( str(len(matching_studies)) )
 
                 for m in met:
-                    outdat.append( format_num(m) )
+                    outdat.append( format_num(m[0]) )
+                    outdat.append( format_num(m[1]) )
 
             else:
                 outdat.append("1")
-                outdat.extend( [format_num(matching_studies[0][1].pval)]  * len(methods) )
+                outdat.extend( [format_num(matching_studies[0][1].beta),format_num(matching_studies[0][1].pval)]  * len(methods) )
+
+            if args.leave_one_out:
+                for s,_ in enumerate(studs):
+                    matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
+                    outdat.append( str(len(matching_studies_loo)) )
+                    if len(matching_studies_loo) > 1:
+                        met = do_meta( matching_studies_loo, methods=methods )
+                        for m in met:
+                            outdat.append( format_num(m[0]) )
+                            outdat.append( format_num(m[1]) )
+                    else:
+                        outdat.extend(['NA'] * 2 * len(methods))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
             next_var = get_next_variant(studs)
-            print("NEXT VARIANTS")
-            print(next_var[0])
-            print(next_var[1])
+            if not args.quiet:
+                print("NEXT VARIANTS")
+                for v in next_var:
+                    print(v)
             matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
     subprocess.run(["bgzip","--force",args.path_to_res])

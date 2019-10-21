@@ -5,6 +5,8 @@ Tools for doing x way meta-analysis
 Variants are matched using chr pos ref and alt. For this reason all 37 build results need to first be lifted over to 38.
 scripts/lift.py can be used to liftover results first if needed.
 
+IMPORTANT: Studies need to be ordered by chr (1-22, x,y,mt) and position. Chromosome can be indicated with numbers 1-25 or chr1-22, chrX,chrY,chrMT and they will be internally coded to numerical values.
+
 ## Running single trait meta-analysis
 scripts/meta_analysis.py is the main script for running meta-analysis for a single trait. Meta-analyses to be performed are specified with json
 configuration file. Example configuration in data/conf.json. Script will try to align using both strands as well as by flipping ref vs. alt.
