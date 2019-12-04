@@ -216,7 +216,11 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf, chrom, dont_allow_space):
+    def __init__(self, conf, chrom=None, dont_allow_space):
+        '''
+        chrom: a chromosome to limit to or None if all chromosomes
+        dont_allow_space: boolean, don't treat space as field delimiter (only tab)
+        '''
         self.conf =conf
         self.chrom = chrom
         self.dont_allow_space = dont_allow_space
@@ -505,7 +509,7 @@ def run():
     parser.set_defaults(leave_one_out=False)
 
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.add_argument('--dont_allow_space', action='store_true', help='Do pairwise meta-analysis with the first given study')
+    parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
 
     parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
 
