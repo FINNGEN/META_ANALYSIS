@@ -34,12 +34,12 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_betas+=math.sqrt(study.effective_size) * dat.beta
         tot_size+=study.effective_size
 
-    return ( sum_betas/ sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ))
+    #TODO se
+    return ( sum_betas/ sum_weights, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )))
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
 
     effs_inv_var = []
-    tot_se = 0
     sum_inv_var=0
     for s in studies:
         study = s[0]
@@ -48,12 +48,11 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
             break
         var = (dat.se * dat.se)
-
-        tot_se+=1/var
+        
         inv_var =  (1/var)
         sum_inv_var+=inv_var
         effs_inv_var.append( inv_var *  dat.beta )
-    return (sum(effs_inv_var)/ sum_inv_var, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(tot_se) )) ) if len(effs_inv_var)==len(studies) else None
+    return (sum(effs_inv_var)/ sum_inv_var, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))) ) if len(effs_inv_var)==len(studies) else None
 
 def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
     effs_se = []
@@ -72,7 +71,9 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_betas+= weight * dat.beta
         effs_se.append( weight * numpy.sign(dat.beta)  )
         tot_se+=1/ (dat.se * dat.se)
-    return ( sum_betas / sum_weights  ,2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se)) ) if len(effs_se)==len(studies) else None
+        
+    #TODO se
+    return ( sum_betas / sum_weights, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))) ) if len(effs_se)==len(studies) else None
 
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
@@ -216,8 +217,13 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf, dont_allow_space):
+    def __init__(self, conf, chrom=None, dont_allow_space=False):
+        '''
+        chrom: a chromosome to limit to or None if all chromosomes
+        dont_allow_space: boolean, don't treat space as field delimiter (only tab)
+        '''
         self.conf =conf
+        self.chrom = chrom
         self.dont_allow_space = dont_allow_space
         self.future = deque()
         self.eff_size= None
@@ -302,7 +308,7 @@ class Study:
             for i,v in reversed(f):
                  del self.future[i]
             return [ v for i,v in f ]
-
+        
         vars = list()
         while True:
             chr = None
@@ -310,7 +316,7 @@ class Study:
             alt = None
             l = None
             ## loop ignoring  alternate contigs and non-ATCG alleles for now.
-            while chr is None or chr not in chrord or re_allele.match(ref) is None or re_allele.match(alt) is None:
+            while chr is None or chr not in chrord or (self.chrom is not None and chr != self.chrom) or re_allele.match(ref) is None or re_allele.match(alt) is None:
                 l = self.conf["fpoint"].readline()
                 if l=="":
                     return None
@@ -319,8 +325,7 @@ class Study:
                     l = l.rstrip().split('\t')
                 else:
                     l = l.rstrip().split()
-
-                chr = l[self.conf["h_idx"]["chr"]]
+                chr = l[self.conf["h_idx"]["chr"]].replace("chr", "")
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
 
@@ -409,7 +414,7 @@ class Study:
             self.future.appendleft(m)
 
 
-def get_studies(conf:str, dont_allow_space) -> List[Study]:
+def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
     """
@@ -417,7 +422,7 @@ def get_studies(conf:str, dont_allow_space) -> List[Study]:
     studies_conf = json.load(open(conf,'r'))
     std_list = studies_conf["meta"]
 
-    return [ Study(s, dont_allow_space) for s in studies_conf["meta"]]
+    return [ Study(s, chrom, dont_allow_space) for s in studies_conf["meta"]]
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -> List[float] :
     '''
@@ -505,14 +510,13 @@ def run():
     parser.set_defaults(leave_one_out=False)
 
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.set_defaults(pairwise_with_first=False)
+    parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
 
-    parser.add_argument('--dont_allow_space', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.set_defaults(dont_allow_space=False)
+    parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
 
     args = parser.parse_args()
 
-    studs = get_studies(args.config_file, args.dont_allow_space)
+    studs = get_studies(args.config_file, args.chrom, args.dont_allow_space)
 
     methods = []
 
@@ -530,27 +534,27 @@ def run():
 
     with open( outfile, 'w' ) as out:
 
-        out.write("\t".join(["#CHR","POS","REF","ALT","SNP", studs[0].name + "_beta", studs[0].name + "_pval"  ]))
+        out.write("\t".join(["#CHR","POS","REF","ALT","SNP", studs[0].name + "_beta", studs[0].name + "_sebeta", studs[0].name + "_pval"  ]))
 
         out.write( ("\t" if len(studs[0].extra_cols) else "") + "\t".join( [studs[0].name + "_" + c for c in studs[0].extra_cols] ) )
         ## align to leftmost STUDY
         for oth in studs[1:len(studs)]:
-            out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_pval"] ))
+            out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_sebeta", oth.name + "_pval"] ))
             out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
 
             if args.pairwise_with_first:
                 for m in methods:
-                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
+                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
 
         out.write("\tall_meta_N")
         for m in methods:
-            out.write("\tall_"+m+"_meta_beta\tall_"+  m +"_meta_p")
+            out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p")
 
         if args.leave_one_out:
             for s in studs:
                 out.write("\t" + "leave_" + s.name + "_N")
                 for m in methods:
-                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_p"] ))
+                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p"] ))
 
         out.write("\n")
 
@@ -570,7 +574,7 @@ def run():
 
             for i,_ in enumerate(studs):
                 if next_var[i] is not None:
-                    outdat.extend([format_num(next_var[i].beta), format_num(next_var[i].pval) ])
+                    outdat.extend([format_num(next_var[i].beta), format_num(next_var[i].se), format_num(next_var[i].pval) ])
                     outdat.extend([ c for c in next_var[i].extra_cols ])
 
                     # meta analyse pairwise only with the leftmost study
@@ -582,10 +586,11 @@ def run():
                         for m in met:
                             outdat.append(format_num(m[0]))
                             outdat.append(format_num(m[1]))
+                            outdat.append(format_num(m[2]))
                     else:
-                        outdat.extend(["NA"] * len(methods) * 2)
+                        outdat.extend(["NA"] * len(methods) * 3)
                 else:
-                    outdat.extend(['NA']  * (2 + len(studs[i].extra_cols) + (len(methods)*2 if args.pairwise_with_first and i>0 else 0) ) )
+                    outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*3 if args.pairwise_with_first and i>0 else 0) ) )
 
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods )
@@ -594,10 +599,11 @@ def run():
                 for m in met:
                     outdat.append( format_num(m[0]) )
                     outdat.append( format_num(m[1]) )
+                    outdat.append( format_num(m[2]) )
 
             else:
                 outdat.append("1")
-                outdat.extend( [format_num(matching_studies[0][1].beta),format_num(matching_studies[0][1].pval)]  * len(methods) )
+                outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval)]  * len(methods) )
 
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
@@ -608,8 +614,9 @@ def run():
                         for m in met:
                             outdat.append( format_num(m[0]) )
                             outdat.append( format_num(m[1]) )
+                            outdat.append( format_num(m[2]) )
                     else:
-                        outdat.extend(['NA'] * 2 * len(methods))
+                        outdat.extend(['NA'] * 3 * len(methods))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
