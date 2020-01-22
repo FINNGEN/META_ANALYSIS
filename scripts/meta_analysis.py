@@ -48,7 +48,7 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
             break
         var = (dat.se * dat.se)
-        
+
         inv_var =  (1/var)
         sum_inv_var+=inv_var
         effs_inv_var.append( inv_var *  dat.beta )
@@ -71,7 +71,7 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_betas+= weight * dat.beta
         effs_se.append( weight * numpy.sign(dat.beta)  )
         tot_se+=1/ (dat.se * dat.se)
-        
+
     #TODO se
     return ( sum_betas / sum_weights, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))) ) if len(effs_se)==len(studies) else None
 
@@ -91,7 +91,6 @@ def flip_strand( allele):
 
 def is_symmetric(a1, a2):
     return (a1=="A" and a2=="T") or (a1=="T" and a2=="A") or (a1=="C" and a2=="G") or (a1=="G" and a2=="C")
-
 
 
 class VariantData:
@@ -228,6 +227,7 @@ class Study:
         self.future = deque()
         self.eff_size= None
         self.z_scr = None
+        self.prev_var = None
         for v in Study.REQUIRED_CONF:
             if v not in self.conf:
                 raise Exception("Meta configuration for study must contain required elements: "
@@ -308,7 +308,7 @@ class Study:
             for i,v in reversed(f):
                  del self.future[i]
             return [ v for i,v in f ]
-        
+
         vars = list()
         while True:
             chr = None
@@ -353,6 +353,10 @@ class Study:
 
             v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
 
+            if self.prev_var is not None and v < self.prev_var:
+                raise Exception(f"Disorder in study {self.conf['name']} in file {self.conf['file']}. Sort all summary statistic files by chromosome and then position and rerun.\n"
+                                f"Offending line: {l}")
+            self.prev_var = v
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 added=False
                 for v_ in vars:
