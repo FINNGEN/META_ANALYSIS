@@ -18,7 +18,7 @@ parser.add_argument("-ref", help="ref column name")
 parser.add_argument("-alt", help="alt column name")
 parser.add_argument("-chain_file", help="optional chain file path")
 parser.add_argument("-no_clean", action="store_true" , default=False, help="Do not clean intermediate files after execution")
-
+parser.add_argument("-tmp_path", help="Directory to use for potentially large temporary files")
 
 args = parser.parse_args()
 
@@ -81,17 +81,23 @@ with openf( args.file ,'rt') as res:
         joinsortargs = ["--var",var+1]
         get_dat_func = partial(get_dat_var,index=var)
     tempbed = str(uuid.uuid4())
-
+    
+    if( args.tmp_path ):
+        joinsortargs.append("--tmp=" + args.tmp_path)
     f = os.path.basename(args.file)
     tmpbed = f + tempbed + "_tmp.bed"
     with open(tmpbed, 'w') as bed:
         for line in res:
-            vardat = get_dat_func(line.rstrip("\n").split())
+            try:
+                vardat = get_dat_func(line.rstrip("\n").split())
+            except IndexError:
+                print("Not enough columns in " + line + ". Ignoring")
+                continue
             try:
                 bed.write( "{}\t{}\t{}\t{}".format(vardat[0] if vardat[0].startswith('chr') else "chr"+vardat[0], str(int(vardat[1])-1), str(int(vardat[1]) + max(len(vardat[2]),len(vardat[3]) ) -1), ":".join([vardat[0],vardat[1],vardat[2],vardat[3]])) + "\n" )
             except ValueError:
                 print("Ignoring unexpected chromosome position: " + ":".join([vardat[0],vardat[1],vardat[2],vardat[3]]))
-                pass
+                continue
 
     temp = f + str(uuid.uuid4())
     subprocess.run([liftOver, tmpbed ,CHAINFILE, temp + "_lifted", temp + "_errors"])
