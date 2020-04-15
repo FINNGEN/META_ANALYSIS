@@ -1,0 +1,9 @@
+{
+  "lift.liftfile.ref_col": "a1",
+  "lift.liftfile.docker": "gcr.io/finngen-refinery-dev/meta:1",
+  "lift.files": "gs://finngen_ukbb_match/all_ukbb_files.tsv",
+  "lift.liftfile.chr_col": "chr",
+  "lift.liftfile.chainfile": "gs://finngen_commons/hg19ToHg38.over.chain.gz",
+  "lift.liftfile.pos_col": "pos",
+  "lift.liftfile.alt_col": "a2"
+}
