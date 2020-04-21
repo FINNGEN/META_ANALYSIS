@@ -14,6 +14,9 @@ from collections import deque
 import re
 
 chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
+chrord["X"] = 23
+chrord["Y"] = 24
+chrord["MT"] = 25
 chrord["chrX"] = 23
 chrord["chrY"] = 24
 chrord["chrMT"] = 25
@@ -354,8 +357,7 @@ class Study:
             v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
 
             if self.prev_var is not None and v < self.prev_var:
-                raise Exception(f"Disorder in study {self.conf['name']} in file {self.conf['file']}. Sort all summary statistic files by chromosome and then position and rerun.\n"
-                                f"Offending line: {l}")
+                raise Exception("Disorder in study " + self.conf['name'] + " in file " + self.conf['file'] + ". Sort all summary statistic files by chromosome and then position and rerun.\nOffending line: " + "\t".join(l))
             self.prev_var = v
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 added=False
