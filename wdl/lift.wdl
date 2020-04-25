@@ -34,10 +34,10 @@ task liftfile {
 
 workflow lift {
     File files
-    Array[String] fs= read_lines(files)
+    Array[Array[String]] fs= read_tsv(files)
     scatter (f in fs) {
         call liftfile {
-            input:  f=f
+            input:  f=f[0], chr_col=f[1], pos_col=f[2], ref_col=f[3], alt_col=f[4]
         }
     }
 
