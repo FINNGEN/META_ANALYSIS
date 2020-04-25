@@ -33,7 +33,7 @@ def het_test( effs_sizes, weights, effs_size_meta):
     eff_dev=weights_array*((effs_sizes_array-effs_size_meta)**2)
     sum_eff_dev=numpy.sum(eff_dev)
 
-    return(stats.distributions.chi2.sf(sum_eff_dev, k-1))
+    return stats.distributions.chi2.sf(sum_eff_dev, k-1)
 
 def n_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
     weights = []
@@ -60,6 +60,7 @@ def n_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
        return ( beta_meta, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )), het_p)
     else:
        return ( beta_meta, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )))	 
+
 
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False):
@@ -605,9 +606,9 @@ def run():
 
         out.write("\tall_meta_N")
         for m in methods:
-	    if args.is_het_test:
+            if args.is_het_test:
                 out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p\tall_"+ m +"_het_p")
-	    else:
+            else:
                 out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p")
 
         if args.leave_one_out:
