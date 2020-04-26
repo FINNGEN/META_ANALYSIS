@@ -1,4 +1,0 @@
-{
-    "clean_sumstats.clean.docker": "gcr.io/covid-19-hg/saige:0.36.3.2-1",
-    "clean_sumstats.sumstats_loc": "gs://covid19-hg-analysis/20200426/formatted/20200426_loc.txt"
-}
