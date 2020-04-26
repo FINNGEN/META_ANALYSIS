@@ -1,8 +1,0 @@
-{
-    "filter_sumstats.sumstats_loc": "gs://covid19-hg-analysis/20200426/20200426_munged_loc.txt",
-    "filter_sumstats.filter_af_info.af_col": "AF_Allele2",
-    "filter_sumstats.filter_af_info.min_af": 0.005,
-    "filter_sumstats.filter_af_info.info_col": "imputationInfo",
-    "filter_sumstats.filter_af_info.min_info": 0.6,
-    "filter_sumstats.filter_af_info.docker": "gcr.io/covid-19-hg/saige:0.36.3.2-1"
-}
