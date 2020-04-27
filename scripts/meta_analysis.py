@@ -651,20 +651,17 @@ def run():
                 else:
                     outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*3 if args.pairwise_with_first and i>0 else 0) ) )
 
+            meta_res = []
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
-                outdat.append( str(len(matching_studies)) )
                 for m in met:
-                    outdat.append( format_num(m[0]) )
-                    outdat.append( format_num(m[1]) )
-                    outdat.append( format_num(m[2]) )
-                    outdat.append( format_num(m[3]) )
-
+                    meta_res.extend([format_num(num) for num in m[0:4]])
             else:
-                outdat.append("1")
-                outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
+                meta_res.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
 
-
+            outdat.append( str(len(matching_studies)) )
+            outdat.extend(meta_res)
+            
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
                     matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
@@ -672,10 +669,9 @@ def run():
                     if len(matching_studies_loo) > 1:
                         met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
-                            outdat.append( format_num(m[0]) )
-                            outdat.append( format_num(m[1]) )
-                            outdat.append( format_num(m[2]) )
-                            outdat.append( format_num(m[3]) )
+                            outdat.extend([format_num(num) for num in m[0:4]])
+                    elif len(matching_studies_loo) == 1:
+                        outdat.extend( [format_num(matching_studies_loo[0][1].beta), format_num(matching_studies_loo[0][1].se) , format_num(matching_studies_loo[0][1].pval), 'NA']  * len(methods) )
                     else:
                         outdat.extend(['NA'] * 4 * len(methods))
 
