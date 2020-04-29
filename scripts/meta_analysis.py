@@ -24,7 +24,21 @@ chrord.update({str(chr):int(chr) for chr in list(range(1,25)) } )
 
 re_allele = re.compile('^[ATCG]+$', re.IGNORECASE)
 
-def n_meta( studies : List[Tuple['Study','VariantData']] ):
+
+def het_test( effs_sizes, weights, effs_size_meta):
+    k=len(effs_sizes)
+
+    effs_sizes_array=numpy.array(effs_sizes)
+    weights_array=numpy.array(weights)    
+    eff_dev=weights_array*((effs_sizes_array-effs_size_meta)**2)
+    sum_eff_dev=numpy.sum(eff_dev)
+
+    return scipy.stats.distributions.chi2.sf(sum_eff_dev, k-1)
+
+def n_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
+    weights = []
+    effs_size_org = [] 
+
     effs_size = []
     tot_size =0
     sum_betas=0
@@ -36,11 +50,22 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_weights+= math.sqrt(study.effective_size)
         sum_betas+=math.sqrt(study.effective_size) * dat.beta
         tot_size+=study.effective_size
+        weights.append(math.sqrt(study.effective_size))
+        effs_size_org.append(dat.beta)
 
+    beta_meta=sum_betas/sum_weights
+    if is_het_test:
+        het_p=het_test(effs_size_org, weights, beta_meta)
+    else:
+        het_p=None
     #TODO se
-    return ( sum_betas/ sum_weights, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )))
+    return ( beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )), het_p)
 
-def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
+
+def inv_var_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False):
+
+    weights = []
+    effs_size_org = []
 
     effs_inv_var = []
     sum_inv_var=0
@@ -55,9 +80,23 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ):
         inv_var =  (1/var)
         sum_inv_var+=inv_var
         effs_inv_var.append( inv_var *  dat.beta )
-    return (sum(effs_inv_var)/ sum_inv_var, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))) ) if len(effs_inv_var)==len(studies) else None
 
-def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
+        weights.append(inv_var)
+        effs_size_org.append(dat.beta)
+
+    beta_meta=sum(effs_inv_var)/ sum_inv_var
+    if is_het_test:
+        het_p=het_test(effs_size_org, weights, beta_meta)
+    else:
+        het_p=None
+    return (beta_meta, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))), het_p) if len(effs_inv_var)==len(studies) else None
+
+
+def variance_weight_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
+
+    weights = []
+    effs_size_org = []
+
     effs_se = []
     tot_se = 0
     sum_weights=0
@@ -74,10 +113,18 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ):
         sum_betas+= weight * dat.beta
         effs_se.append( weight * numpy.sign(dat.beta)  )
         tot_se+=1/ (dat.se * dat.se)
+        
+        weights.append(weight)
+        effs_size_org.append(dat.beta)
 
-    #TODO se
-    return ( sum_betas / sum_weights, 0, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))) ) if len(effs_se)==len(studies) else None
-
+    beta_meta=sum_betas / sum_weights
+    if is_het_test:
+        het_p=het_test(effs_size_org, weights, beta_meta)
+    else:
+        het_p = None
+    #TODO SE
+    return (beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))), het_p) if len(effs_se)==len(studies) else None
+    
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
 
@@ -430,7 +477,7 @@ def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
 
     return [ Study(s, chrom, dont_allow_space) for s in studies_conf["meta"]]
 
-def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -> List[float] :
+def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[float] :
     '''
         Computes meta-analysis between all studies and data given in the std_list
         input:
@@ -438,7 +485,7 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str] ) -
         output:
             list of  tuples (effect_size, p-value) for each method in the same order as methods were given
     '''
-    return [ SUPPORTED_METHODS[m](study_list) for m in methods ]
+    return [ SUPPORTED_METHODS[m](study_list, is_het_test) for m in methods ]
 
 def format_num(num, precision=2):
     return numpy.format_float_scientific(num, precision=precision) if num is not None else "NA"
@@ -515,6 +562,9 @@ def run():
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
     parser.set_defaults(leave_one_out=False)
 
+    parser.add_argument('--is_het_test', action='store_true', help='Do heterogeneity tests based on Cochrans Q and output het_p')
+    parser.set_defaults(het_test=False)
+
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
     parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
 
@@ -554,13 +604,16 @@ def run():
 
         out.write("\tall_meta_N")
         for m in methods:
-            out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p")
+            if args.is_het_test:
+                out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p\tall_"+ m +"_het_p")
+            else:
+                out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p")
 
         if args.leave_one_out:
             for s in studs:
                 out.write("\t" + "leave_" + s.name + "_N")
                 for m in methods:
-                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p"] ))
+                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_het_p"] ))
 
         out.write("\n")
 
@@ -588,7 +641,7 @@ def run():
                         continue
 
                     if next_var[0] is not None:
-                        met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods )
+                        met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods , is_het_test=False)
                         for m in met:
                             outdat.append(format_num(m[0]))
                             outdat.append(format_num(m[1]))
@@ -598,31 +651,29 @@ def run():
                 else:
                     outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*3 if args.pairwise_with_first and i>0 else 0) ) )
 
+            meta_res = []
             if len( matching_studies )>1:
-                met = do_meta( matching_studies, methods=methods )
-                outdat.append( str(len(matching_studies)) )
-
+                met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
                 for m in met:
-                    outdat.append( format_num(m[0]) )
-                    outdat.append( format_num(m[1]) )
-                    outdat.append( format_num(m[2]) )
-
+                    meta_res.extend([format_num(num) for num in m[0:4]])
             else:
-                outdat.append("1")
-                outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval)]  * len(methods) )
+                meta_res.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
 
+            outdat.append( str(len(matching_studies)) )
+            outdat.extend(meta_res)
+            
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
                     matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
                     outdat.append( str(len(matching_studies_loo)) )
                     if len(matching_studies_loo) > 1:
-                        met = do_meta( matching_studies_loo, methods=methods )
+                        met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
-                            outdat.append( format_num(m[0]) )
-                            outdat.append( format_num(m[1]) )
-                            outdat.append( format_num(m[2]) )
+                            outdat.extend([format_num(num) for num in m[0:4]])
+                    elif len(matching_studies_loo) == 1:
+                        outdat.extend( [format_num(matching_studies_loo[0][1].beta), format_num(matching_studies_loo[0][1].se) , format_num(matching_studies_loo[0][1].pval), 'NA']  * len(methods) )
                     else:
-                        outdat.extend(['NA'] * 3 * len(methods))
+                        outdat.extend(['NA'] * 4 * len(methods))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
