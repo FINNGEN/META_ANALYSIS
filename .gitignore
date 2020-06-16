@@ -1,0 +1,5 @@
+.envrc
+__pycache__
+*~
+.direnv
+.idea
