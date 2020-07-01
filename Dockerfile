@@ -1,5 +1,5 @@
 #FROM gcr.io/finngen-refinery-dev/bioinformatics:0.5
 FROM python:3.8
 
-RUN pip3 install -r requirements/docker.txt
-ADD META_ANALYSIS /META_ANALYSIS
+ADD . /META_ANALYSIS
+RUN pip3 install -r /META_ANALYSIS/requirements/docker.txt
