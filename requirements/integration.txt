@@ -1,0 +1,9 @@
+-r common.txt
+pytest
+coverage
+pylint
+pyflakes
+mypy
+prospector
+bandit
+safety
