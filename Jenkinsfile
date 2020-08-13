@@ -12,18 +12,18 @@ pipeline {
 	}
       }
     }
-  }
-  stage('Metrics') {
-    steps {
-      withSonarQubeEnv('sonar') {
+    stage('Metrics') {
+      steps {
+	withSonarQubeEnv('sonar') {
 
-	sh "${tool("sonar")}/bin/sonar-scanner \
+	  sh "${tool("sonar")}/bin/sonar-scanner \
           -Dsonar.projectKey=${JOB_NAME} \
           -Dsonar.sources=. \
           -Dsonar.css.node=. \
           -Dsonar.host.url=${DEFAULT_SONAR_URL} \
           -Dsonar.login=${SONAR_LOGIN}"
 
+	}
       }
     }
   }
