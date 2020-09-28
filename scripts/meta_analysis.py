@@ -655,7 +655,10 @@ def run():
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
                 for m in met:
-                    meta_res.extend([format_num(num) for num in m[0:4]])
+                    if m is not None:
+                        meta_res.extend([format_num(num) for num in m[0:4]])
+                    else:
+                        meta_res.extend(['NA'] * 4)
             else:
                 meta_res.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
 
@@ -669,7 +672,10 @@ def run():
                     if len(matching_studies_loo) > 1:
                         met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
-                            outdat.extend([format_num(num) for num in m[0:4]])
+                            if m is not None:
+                                meta_res.extend([format_num(num) for num in m[0:4]])
+                            else:
+                                meta_res.extend(['NA'] * 4)
                     elif len(matching_studies_loo) == 1:
                         outdat.extend( [format_num(matching_studies_loo[0][1].beta), format_num(matching_studies_loo[0][1].se) , format_num(matching_studies_loo[0][1].pval), 'NA']  * len(methods) )
                     else:
