@@ -25,7 +25,16 @@ chrord.update({str(chr):int(chr) for chr in list(range(1,25)) } )
 re_allele = re.compile('^[ATCG]+$', re.IGNORECASE)
 
 
-def het_test( effs_sizes, weights, effs_size_meta):
+def het_test( effs_sizes: List[float], weights: List[float], effs_size_meta: float) -> float:
+    '''
+        Computes Cochran's Q test for heterogeneity
+        input:
+            effs_sizes: original effect sizes
+            weights: weights
+            effs_size_meta: effect size from meta-analysis
+        output:
+            p-value
+    '''
     k=len(effs_sizes)
 
     effs_sizes_array=numpy.array(effs_sizes)
@@ -35,7 +44,15 @@ def het_test( effs_sizes, weights, effs_size_meta):
 
     return scipy.stats.distributions.chi2.sf(sum_eff_dev, k-1)
 
-def n_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
+def n_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ) -> Tuple:
+    '''
+        Computes sample size weighted meta-analysis for variants in studies
+        input:
+            studies: studies and data in tuples
+            is_het_test: boolean, do heterogenity test
+        output:
+            tuple with results from meta-analysis and heterogeneity test p-value (if calculated)
+    '''
     weights = []
     effs_size_org = [] 
 
@@ -62,8 +79,15 @@ def n_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
     return ( beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )), het_p) if len(effs_size)==len(studies) else (None, None, None, None)
 
 
-def inv_var_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False):
-
+def inv_var_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ) -> Tuple:
+    '''
+        Computes inverse-variance weighted meta-analysis for variants in studies
+        input:
+            studies: studies and data in tuples
+            is_het_test: boolean, do heterogenity test
+        output:
+            tuple with results from meta-analysis and heterogeneity test p-value (if calculated)
+    '''
     weights = []
     effs_size_org = []
 
@@ -92,8 +116,15 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']], is_het_test = Fa
     return (beta_meta, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))), het_p) if len(effs_inv_var)==len(studies) else (None, None, None, None)
 
 
-def variance_weight_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ):
-
+def variance_weight_meta( studies : List[Tuple['Study','VariantData']], is_het_test = False ) -> Tuple:
+    '''
+        Computes variance weighted meta-analysis for variants in studies
+        input:
+            studies: studies and data in tuples
+            is_het_test: boolean, do heterogenity test
+        output:
+            tuple with results from meta-analysis and heterogeneity test p-value (if calculated)
+    '''
     weights = []
     effs_size_org = []
 
