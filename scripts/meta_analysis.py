@@ -93,7 +93,7 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
         dat = s[1]
         if dat.se is None or dat.se==0:
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
-            break
+            return None
         var = (dat.se * dat.se)
 
         inv_var =  (1/var)
@@ -105,7 +105,7 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
 
     beta_meta=sum(effs_inv_var)/ sum_inv_var
     
-    return (beta_meta, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))), effs_size_org, weights) if len(effs_inv_var)==len(studies) else None
+    return (beta_meta, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))), effs_size_org, weights)
 
 
 def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
@@ -129,7 +129,7 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tupl
 
         if dat.se is None or dat.se==0:
             print("Standard error was none/zero for variant " + str(dat) + " in study " + study.name, file=sys.stderr)
-            break
+            return None
         weight =  (1/dat.se) * dat.z_score
         sum_weights+=weight
         sum_betas+= weight * dat.beta
@@ -142,7 +142,7 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tupl
     beta_meta=sum_betas / sum_weights
     
     #TODO SE
-    return (beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))), effs_size_org, weights) if len(effs_se)==len(studies) else None
+    return (beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))), effs_size_org, weights)
     
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
