@@ -370,7 +370,7 @@ class Study:
             while chr is None or chr not in chrord or (self.chrom is not None and chr != self.chrom) or re_allele.match(ref) is None or re_allele.match(alt) is None:
                 l = self.conf["fpoint"].readline()
                 if l=="":
-                    return None
+                    return None if len(vars) == 0 else vars
 
                 if self.dont_allow_space:
                     l = l.rstrip().split('\t')
