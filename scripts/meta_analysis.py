@@ -21,6 +21,7 @@ chrord["chrX"] = 23
 chrord["chrY"] = 24
 chrord["chrMT"] = 25
 chrord.update({str(chr):int(chr) for chr in list(range(1,25)) } )
+chrord.update({int(chr):int(chr) for chr in list(range(1,25)) } )
 
 re_allele = re.compile('^[ATCG]+$', re.IGNORECASE)
 
@@ -291,7 +292,7 @@ class Study:
         dont_allow_space: boolean, don't treat space as field delimiter (only tab)
         '''
         self.conf =conf
-        self.chrom = chrom
+        self.chrom = chrord[chrom] if chrom is not None else None
         self.dont_allow_space = dont_allow_space
         self.future = deque()
         self.eff_size= None
@@ -388,13 +389,14 @@ class Study:
             while chr is None or chr not in chrord or (self.chrom is not None and chr != self.chrom) or re_allele.match(ref) is None or re_allele.match(alt) is None:
                 l = self.conf["fpoint"].readline()
                 if l=="":
-                    return None
+                    return None if len(vars) == 0 else vars
 
                 if self.dont_allow_space:
                     l = l.rstrip().split('\t')
                 else:
                     l = l.rstrip().split()
-                chr = l[self.conf["h_idx"]["chr"]].replace("chr", "")
+                chr = l[self.conf["h_idx"]["chr"]]
+                chr = chrord[chr] if chr in chrord else None
                 ref = l[self.conf["h_idx"]["ref"]]
                 alt = l[self.conf["h_idx"]["alt"]]
 
@@ -417,7 +419,6 @@ class Study:
             if( effect_type=="or" and eff):
                 eff = math.log(eff)
 
-            chr = chrord[chr]
             extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
 
             v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
