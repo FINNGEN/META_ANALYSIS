@@ -34,7 +34,7 @@ task plot {
         disks: "local-disk 50 HDD"
         zones: "europe-west1-b"
         preemptible: 0
-        noAddress: false
+        noAddress: true
     }
 }
 
