@@ -365,16 +365,19 @@ class Study:
     def has_std_err(self):
         return "se" in self.conf
 
-    def get_next_data(self, just_one =False) -> List[VariantData]:
+    def get_next_data(self, just_one: bool = False, force_get_next: bool = False) -> List[VariantData]:
         """
-            Returns a list of variants. List containts >1 elements if they are on the same position and just_one ==False.
-            args:
+            Returns a list of variants. List containts >1 elements if they are on the same position and just_one == False.
+
+            input:
                 just_one: always returns only the next variant in order and not all next with the same position
-            returns: list of next variants
+                force_get_next: Don't check self.future but return next variant from study
+            output:
+                list of next variants
         """
-        if len(self.future)>0:
+        if (len(self.future)>0) & (not force_get_next):
             ## only return variants with same position so that possible next variant position stored stays
-            f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos) ]
+            f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[0].chr and  v.pos==self.future[0].pos) ]
             for i,v in reversed(f):
                  del self.future[i]
             return [ v for i,v in f ]
@@ -481,10 +484,20 @@ class Study:
         return None
 
 
-    def put_back(self, VariantData):
-        for m in VariantData:
-            ## the future in next position will be always kept last
-            self.future.appendleft(m)
+    def put_back(self, variantlist: List[VariantData], right: bool = False):
+        '''
+        Put list of variants back to wait for matching
+        
+        input:
+            variantlist: list of VariantData objects
+            right: if True, add variants in list to the end of deque. If False, add in the beginning
+        output:
+            p-value
+        '''
+        if right:
+            self.future.extend(variantlist)
+        else:
+            self.future.extendleft(variantlist)
 
 
 def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
@@ -553,9 +566,26 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
             res.append(None)
             continue
 
+        # Flag tracks that only one variant is returned per study, if for some reason multiple variants equal to first
+        added=False
         for v in dats[i]:
-            if v.equalize_to(first):
-                res.append(v)
+            if not added:
+                if v.equalize_to(first):
+                    res.append(v)
+                    added=True
+                else:
+                    # Check next variant in case it matches first
+                    if (first.chr == v.chr and first.pos == v.pos):
+                        next_var = s.get_next_data(just_one=True, force_get_next=True)[0]
+                        if next_var.equalize_to(first):
+                            res.append(next_var)
+                            added=True
+                            s.put_back([v])
+                        else:
+                            s.put_back([v])
+                            s.put_back([next_var], right=True)
+                    else:
+                        s.put_back([v])
             else:
                 s.put_back([v])
         if len(res)<i+1:
