@@ -66,6 +66,7 @@ task combine_chrom_metas {
 
     output {
         File meta_out = pheno + "_meta_out.tsv.gz"
+        File meta_out_tbi = pheno + "_meta_out.tsv.gz.tbi"
     }
     
     runtime {
