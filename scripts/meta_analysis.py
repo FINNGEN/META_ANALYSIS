@@ -500,7 +500,6 @@ class Study:
         
         input:
             variantlist: list of VariantData objects
-            right: if True, add variants in list to the end of deque. If False, add in the beginning
         output:
             p-value
         '''
