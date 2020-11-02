@@ -262,17 +262,6 @@ class VariantData:
 
         return False
 
-    def is_perfect_match(self, other:'VariantData') -> bool:
-        """
-            Checks if this VariantData is exactly the same variant
-
-            input:
-                other: A VariantData object to compare to
-            output:
-                True if perfect match False if not
-        """
-        return(self.chr == other.chr and self.pos == other.pos and self.ref == other.ref and self.alt == other.alt)
-
     @property
     def z_score(self):
         '''
@@ -577,7 +566,7 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
         added=False
         for v in reversed(dats[i]):
             if not added:
-                if v.is_perfect_match(first):
+                if v == first:
                     res.append(v)
                     added=True
                 else:
@@ -585,7 +574,7 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
                     if (first.chr == v.chr and first.pos == v.pos):
                         next_vars = s.get_next_data()
                         for j,var in reversed(list(enumerate(next_vars))):
-                            if var.is_perfect_match(first):
+                            if var == first:
                                 res.append(var)
                                 added=True
                                 del next_vars[j]
