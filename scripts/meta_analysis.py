@@ -262,6 +262,17 @@ class VariantData:
 
         return False
 
+    def is_perfect_match(self, other:'VariantData') -> bool:
+        """
+            Checks if this VariantData is exactly the same variant
+
+            input:
+                other: A VariantData object to compare to
+            output:
+                True if perfect match False if not
+        """
+        return(self.chr == other.chr and self.pos == other.pos and self.ref == other.ref and self.alt == other.alt)
+
     @property
     def z_score(self):
         '''
@@ -365,17 +376,16 @@ class Study:
     def has_std_err(self):
         return "se" in self.conf
 
-    def get_next_data(self, just_one: bool = False, force_get_next: bool = False) -> List[VariantData]:
+    def get_next_data(self, just_one: bool = False) -> List[VariantData]:
         """
             Returns a list of variants. List containts >1 elements if they are on the same position and just_one == False.
 
             input:
                 just_one: always returns only the next variant in order and not all next with the same position
-                force_get_next: Don't check self.future but return next variant from study
             output:
                 list of next variants
         """
-        if (len(self.future)>0) & (not force_get_next):
+        if (len(self.future)>0):
             ## only return variants with same position so that possible next variant position stored stays
             f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[0].chr and  v.pos==self.future[0].pos) ]
             for i,v in reversed(f):
@@ -484,7 +494,7 @@ class Study:
         return None
 
 
-    def put_back(self, variantlist: List[VariantData], right: bool = False):
+    def put_back(self, variantlist: List[VariantData]):
         '''
         Put list of variants back to wait for matching
         
@@ -494,10 +504,8 @@ class Study:
         output:
             p-value
         '''
-        if right:
-            self.future.extend(variantlist)
-        else:
-            self.future.extendleft(variantlist)
+        
+        self.future.extendleft(variantlist)
 
 
 def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
@@ -566,24 +574,42 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
             res.append(None)
             continue
 
-        # Flag tracks that only one variant is returned per study, if for some reason multiple variants equal to first
+        # Flag tracks that only one variant is returned per study, if multiple variants equal to first
         added=False
-        for v in dats[i]:
+        for v in reversed(dats[i]):
             if not added:
-                if v.equalize_to(first):
+                if v.is_perfect_match(first):
                     res.append(v)
                     added=True
                 else:
-                    # Check next variant in case it matches first
+                    # If same position, check next variants in case there is a better match
                     if (first.chr == v.chr and first.pos == v.pos):
-                        next_var = s.get_next_data(just_one=True, force_get_next=True)[0]
-                        if next_var.equalize_to(first):
-                            res.append(next_var)
-                            added=True
-                            s.put_back([v])
-                        else:
-                            s.put_back([v])
-                            s.put_back([next_var], right=True)
+                        next_vars = s.get_next_data()
+                        for j,var in reversed(list(enumerate(next_vars))):
+                            if var.is_perfect_match(first):
+                                res.append(var)
+                                added=True
+                                del next_vars[j]
+                                s.put_back(next_vars)
+                                s.put_back([v])
+                                break
+                            if not var.is_equal(first):
+                                s.put_back([var])
+                                del next_vars[j]
+                        if not added:
+                            if v.equalize_to(first):
+                                res.append(v)
+                                s.put_back(next_vars)
+                                added=True
+                            else:
+                                for j,var in reversed(list(enumerate(next_vars))):
+                                    if var.equalize_to(first):
+                                        res.append(var)
+                                        added=True
+                                        del next_vars[j]
+                                        break
+                                s.put_back(next_vars)
+                                s.put_back([v])
                     else:
                         s.put_back([v])
             else:
