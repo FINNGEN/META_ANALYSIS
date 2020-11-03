@@ -374,14 +374,18 @@ class Study:
             output:
                 list of next variants
         """
-        if (len(self.future)>0):
-            ## only return variants with same position so that possible next variant position stored stays
-            f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[0].chr and  v.pos==self.future[0].pos) ]
-            for i,v in reversed(f):
-                 del self.future[i]
-            return [ v for i,v in f ]
 
         vars = list()
+
+        if len(self.future)>0:
+            ## only return variants with same position so that possible next variant position stored stays
+            f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[0].chr and v.pos==self.future[0].pos) ]
+            for i,v in reversed(f):
+                del self.future[i]
+            vars.extend([ v for i,v in f ])
+            if len(self.future)>0:
+                return vars
+
         while True:
             chr = None
             ref = None
@@ -562,47 +566,27 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
             res.append(None)
             continue
 
-        # Flag tracks that only one variant is returned per study, if multiple variants equal to first
+        # Flag tracks that only one variant (best match) is returned per study, if multiple variants equal to first
         added=False
-        for v in reversed(dats[i]):
-            if not added:
-                if v == first:
+        for j,v in reversed(list(enumerate(dats[i]))):
+            if v == first:
+                res.append(v)
+                added=True
+                del dats[i][j]
+                s.put_back(dats[i])
+                break
+            if not v.is_equal(first):
+                s.put_back([v])
+                del dats[i][j]
+        if not added:
+            for j,v in reversed(list(enumerate(dats[i]))):
+                if v.equalize_to(first):
                     res.append(v)
                     added=True
-                else:
-                    # If same position, check next variants in case there is a better match
-                    if (first.chr == v.chr and first.pos == v.pos):
-                        next_vars = s.get_next_data()
-                        for j,var in reversed(list(enumerate(next_vars))):
-                            if var == first:
-                                res.append(var)
-                                added=True
-                                del next_vars[j]
-                                s.put_back(next_vars)
-                                s.put_back([v])
-                                break
-                            if not var.is_equal(first):
-                                s.put_back([var])
-                                del next_vars[j]
-                        if not added:
-                            if v.equalize_to(first):
-                                res.append(v)
-                                s.put_back(next_vars)
-                                added=True
-                            else:
-                                for j,var in reversed(list(enumerate(next_vars))):
-                                    if var.equalize_to(first):
-                                        res.append(var)
-                                        added=True
-                                        del next_vars[j]
-                                        break
-                                s.put_back(next_vars)
-                                s.put_back([v])
-                    else:
-                        s.put_back([v])
-            else:
-                s.put_back([v])
-        if len(res)<i+1:
+                    del dats[i][j]
+                    break
+            s.put_back(dats[i])
+        if not added:
             res.append(None)
 
     return res
