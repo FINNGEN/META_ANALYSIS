@@ -431,7 +431,7 @@ class Study:
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 added=False
                 for v_ in vars:
-                    if v.is_equal(v_):
+                    if v == v_:
                         print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v))
                         added=True
                 if not added:
