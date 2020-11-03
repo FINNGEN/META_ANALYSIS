@@ -436,7 +436,7 @@ class Study:
                 added=False
                 for v_ in vars:
                     if v == v_:
-                        print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v))
+                        print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v), file=sys.stderr)
                         added=True
                 if not added:
                     vars.append(v )
