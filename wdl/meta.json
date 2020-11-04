@@ -3,8 +3,8 @@
     "meta_analysis.pheno_confs": "gs://r6_data/ukb_meta/conf/conf_jsons.txt",
     "meta_analysis.run_qc.plot.loglog_ylim": 20,
     "meta_analysis.run_qc.plot.docker": "gcr.io/finngen-refinery-dev/saige:0.36.3.2-2",
-    "meta_analysis.run_meta.run_range.docker": "gcr.io/finngen-refinery-dev/meta:jm-2",
+    "meta_analysis.run_meta.run_range.docker": "gcr.io/finngen-refinery-dev/meta:jm-4",
     "meta_analysis.run_meta.run_range.method": "inv_var",
     "meta_analysis.run_meta.run_range.opts": "--is_het_test",
-    "meta_analysis.run_meta.combine_chrom_metas.docker": "gcr.io/finngen-refinery-dev/meta:jm-2"
+    "meta_analysis.run_meta.combine_chrom_metas.docker": "gcr.io/finngen-refinery-dev/meta:jm-4"
 }
