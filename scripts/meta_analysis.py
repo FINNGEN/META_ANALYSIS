@@ -365,21 +365,27 @@ class Study:
     def has_std_err(self):
         return "se" in self.conf
 
-    def get_next_data(self, just_one =False) -> List[VariantData]:
+    def get_next_data(self, just_one: bool = False) -> List[VariantData]:
         """
-            Returns a list of variants. List containts >1 elements if they are on the same position and just_one ==False.
-            args:
+            Returns a list of variants. List containts >1 elements if they are on the same position and just_one == False.
+
+            input:
                 just_one: always returns only the next variant in order and not all next with the same position
-            returns: list of next variants
+            output:
+                list of next variants
         """
-        if len(self.future)>0:
-            ## only return variants with same position so that possible next variant position stored stays
-            f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[i-1].chr and  v.pos==self.future[i-1].pos) ]
-            for i,v in reversed(f):
-                 del self.future[i]
-            return [ v for i,v in f ]
 
         vars = list()
+
+        if len(self.future)>0:
+            ## only return variants with same position so that possible next variant position stored stays
+            f = [ (i,v) for i,v in enumerate(self.future) if i==0 or (v.chr==self.future[0].chr and v.pos==self.future[0].pos) ]
+            for i,v in reversed(f):
+                del self.future[i]
+            vars.extend([ v for i,v in f ])
+            if len(self.future)>0:
+                return vars
+
         while True:
             chr = None
             ref = None
@@ -429,8 +435,8 @@ class Study:
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 added=False
                 for v_ in vars:
-                    if v.is_equal(v_):
-                        print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v))
+                    if v == v_:
+                        print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v), file=sys.stderr)
                         added=True
                 if not added:
                     vars.append(v )
@@ -481,10 +487,17 @@ class Study:
         return None
 
 
-    def put_back(self, VariantData):
-        for m in VariantData:
-            ## the future in next position will be always kept last
-            self.future.appendleft(m)
+    def put_back(self, variantlist: List[VariantData]):
+        '''
+        Put list of variants back to wait for matching
+        
+        input:
+            variantlist: list of VariantData objects
+        output:
+            p-value
+        '''
+        
+        self.future.extendleft(variantlist)
 
 
 def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
@@ -553,12 +566,27 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
             res.append(None)
             continue
 
-        for v in dats[i]:
-            if v.equalize_to(first):
+        # Flag tracks that only one variant (best match) is returned per study, if multiple variants equal to first
+        added=False
+        for j,v in reversed(list(enumerate(dats[i]))):
+            if v == first:
                 res.append(v)
-            else:
+                added=True
+                del dats[i][j]
+                s.put_back(dats[i])
+                break
+            if not v.is_equal(first):
                 s.put_back([v])
-        if len(res)<i+1:
+                del dats[i][j]
+        if not added:
+            for j,v in reversed(list(enumerate(dats[i]))):
+                if v.equalize_to(first):
+                    res.append(v)
+                    added=True
+                    del dats[i][j]
+                    break
+            s.put_back(dats[i])
+        if not added:
             res.append(None)
 
     return res
