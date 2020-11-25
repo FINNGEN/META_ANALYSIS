@@ -418,7 +418,7 @@ class Study:
             try:
                 pval = float(pval)
                 eff = float(eff)
-            except Exception as e:
+            except:
                 pval = None
                 eff = None
 
@@ -506,7 +506,6 @@ def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
     """
 
     studies_conf = json.load(open(conf,'r'))
-    std_list = studies_conf["meta"]
 
     return [ Study(s, chrom, dont_allow_space) for s in studies_conf["meta"]]
 
