@@ -94,7 +94,7 @@ task meta_qq {
 
         mv ${meta_out} ${base}
 
-        qqplot.R --file ${base} --bp_col "POS" --chrcol "#CHR" --pval_col ${pvals_to_plot} --loglog_ylim ${loglog_ylim}
+        /META_ANALYSIS/scripts/qqplot.R --file ${base} --bp_col "POS" --chrcol "#CHR" --pval_col ${pvals_to_plot} --loglog_ylim ${loglog_ylim}
 
     >>>
 
