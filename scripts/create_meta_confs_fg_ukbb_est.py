@@ -82,7 +82,7 @@ def run():
 
     # Read ukbb study metadata and drop phenotypes not in mapping
     # Note: UKBB has duplicate phenocodes.
-    # Remove from duplicate pairs ones with 'trait_type' == 'continuous' (they have unusually high n_cases_EUR and missing n_controls_EUR)
+    # Remove from duplicate pairs ones with 'trait_type' == 'continuous'
     ukbb = pd.read_csv(args.in_study_ukbb_file, sep='\t')
     ukbb = ukbb[ukbb['phenocode'].isin(mapping['ukbb_phenotype'])]
     duplicated_ids = ukbb['phenocode'][ukbb['phenocode'].duplicated()]
