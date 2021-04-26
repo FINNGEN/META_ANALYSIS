@@ -1,3 +1,49 @@
+workflow run_meta {
+
+    String pheno
+    String conf
+    Array[String] sumstat_files
+    
+    scatter (chr in range(23)) {
+        call run_range {
+            input:
+                pheno=pheno,
+                conf=conf,
+                sumstat_files = sumstat_files,
+                chrom=chr+1
+        }
+    }
+
+    call combine_chrom_metas {
+        input:
+            pheno=pheno,
+            meta_outs=run_range.out
+    }
+
+    call add_rsids {
+        input:
+            meta_file=combine_chrom_metas.meta_out
+    }
+
+    call meta_qq {
+        input:
+            meta_file=combine_chrom_metas.meta_out
+    }
+
+    call post_filter {
+        input:
+            meta_file=add_rsids.meta_out
+    }
+
+    output {
+        File meta_out = combine_chrom_metas.meta_out
+        File filtered_meta_out = post_filter.filtered_meta_out
+        Array[File] pngs = meta_qq.pngs
+        Array[File] lambdas = meta_qq.lambdas
+    }
+}
+
+# Run meta-analysis for each chromosome separately
 task run_range {
 
     # localize the files, referenced locally in the conf
@@ -13,7 +59,7 @@ task run_range {
 
     command <<<
 
-        echo "`date` FinnGen - UKBB meta-analysis"
+        echo "`date` GWAS meta-analysis"
         echo "docker: ${docker}"
         echo "pheno: ${pheno}"
         echo "method: ${method}"
@@ -41,6 +87,7 @@ task run_range {
     }
 }
 
+# Combine separately run meta-analysis result files
 task combine_chrom_metas {
 
     String pheno
@@ -80,19 +127,131 @@ task combine_chrom_metas {
     }
 }
 
+# Add rsids
+task add_rsids {
+
+    File ref_file
+    String docker
+
+    File meta_file
+
+    String base = basename(meta_file, ".tsv.gz")
+
+    command <<<
+
+        set -euxo pipefail
+
+        echo "`date` Adding rsids"
+
+        python3 <<EOF | bgzip > ${base}.tsv.gz
+
+        import gzip
+
+        fp_ref = gzip.open('${ref_file}', 'rt')
+        ref_has_lines = True
+        ref_chr = 1
+        ref_pos = 0
+        ref_line = fp_ref.readline()
+        while ref_line.startswith("##"):
+            ref_line = fp_ref.readline()
+        if ref_line.startswith('#'):
+            assert ref_line.rstrip('\r\n').split('\t') == '#CHROM POS ID REF ALT QUAL FILTER INFO'.split(), repr(ref_line)
+        ref_h_idx = {h:i for i,h in enumerate(ref_line.rstrip('\r\n').split('\t'))}
+
+        with gzip.open('${meta_file}', 'rt') as f:
+            header = f.readline().strip()
+            h_idx = {h:i for i,h in enumerate(header.split('\t'))}
+            print(header + '\trsid')
+            for line in f:
+                line = line.strip()
+                s = line.split('\t')
+                chr = int(s[h_idx['#CHR']])
+                pos = int(s[h_idx['POS']])
+                ref = s[h_idx['REF']]
+                alt = s[h_idx['ALT']]
+                ref_vars = []
+                while ref_has_lines and int(ref_chr) < chr or (int(ref_chr) == chr and ref_pos < pos):
+                    ref_line = fp_ref.readline().rstrip('\r\n').split('\t')
+                    try:
+                        ref_chr = ref_line[ref_h_idx['#CHROM']]
+                        ref_pos = int(ref_line[ref_h_idx['POS']])
+                    except ValueError:
+                        ref_has_lines = False
+                while ref_has_lines and int(ref_chr) == chr and ref_pos == pos:
+                    ref_vars.append(ref_line)
+                    ref_line = fp_ref.readline().strip().split('\t')
+                    try:
+                        ref_chr = ref_line[ref_h_idx['#CHROM']]
+                        ref_pos = int(ref_line[ref_h_idx['POS']])
+                    except ValueError:
+                        ref_has_lines = False
+
+                rsid = 'NA'
+                for r in ref_vars:
+                    if r[ref_h_idx['REF']] == ref and r[ref_h_idx['ALT']] == alt:
+                        rsid = r[ref_h_idx['ID']]
+                        break
+
+                print(line + '\t' + rsid)
+
+        EOF
+
+        echo "`date` tabixing"
+        tabix -s 1 -b 2 -e 2 ${base}.tsv.gz
+        echo "`date` done"
+
+    >>>
+
+    output {
+        File meta_out = base + ".tsv.gz"
+        File out_tbi = base + ".tsv.gz.tbi"
+    }
+
+    runtime {
+        docker: "${docker}"
+        cpu: "1"
+        memory: "2 GB"
+        disks: "local-disk " + 2*ceil(size(meta_file, "G") + size(ref_file, "G")) + " SSD"
+        zones: "europe-west1-b"
+        preemptible: 0
+        noAddress: true
+    }
+
+}
+
+# Generate qq and manhattan plots from meta-analysis results
 task meta_qq {
 
     Int loglog_ylim
     String docker
     String pvals_to_plot
 
-    File meta_out
+    File meta_file
 
-    String base = basename(meta_out)
+    String base = basename(meta_file, ".tsv.gz")
 
     command <<<
 
-        mv ${meta_out} ${base}
+        set -euxo pipefail
+
+        # Strip unnecessary columns for qqplot.R
+        # TODO: Empty output
+        python3 <<EOF > ${base}
+
+        import gzip
+
+        pval_cols = [i.strip() for i in '${pvals_to_plot}'.split(',')]
+
+        cols_to_print = ['#CHR', 'POS'] + pval_cols
+
+        with gzip.open('${meta_file}', 'rt') as f:
+            h_idx = {h:i for i,h in enumerate(f.readline().strip().split('\t'))}
+            print('\t'.join(cols_to_print))
+            for line in f:
+                s = line.strip().split('\t')
+                print('\t'.join([s[h_idx[i]] for i in cols_to_print]))
+
+        EOF
 
         /META_ANALYSIS/scripts/qqplot.R --file ${base} --bp_col "POS" --chrcol "#CHR" --pval_col ${pvals_to_plot} --loglog_ylim ${loglog_ylim}
 
@@ -106,32 +265,48 @@ task meta_qq {
     runtime {
         docker: "${docker}"
         cpu: "1"
-        memory: 20*ceil(size(meta_out, "G")) + " GB"
-        disks: "local-disk 50 HDD"
+        memory: "20 GB"
+        disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b"
         preemptible: 0
         noAddress: true
     }
 }
 
+# Filter out variants not in the left-most study (usually Finngen)
+task post_filter {
 
-workflow run_meta {
+    String docker
 
-    String pheno
-    String conf
-    Array[String] sumstat_files
-    
-    scatter (chr in range(23)) {
-        call run_range {
-            input: pheno=pheno, conf=conf, sumstat_files = sumstat_files, chrom=chr+1
-        }
+    File meta_file
+
+    String base = basename(meta_file, ".tsv.gz")
+
+    command <<<
+
+        set -exo pipefail
+
+        # Use the first '_beta' suffix column as the beta of the left-most variant. If NA --> remove variant
+        zcat ${meta_file} | awk -v OFS='\t' '
+        NR==1 {for(i=1;i<=NF;i++) if($i~"_beta$") {beta_col=i; break} print $0}
+        (NR>1 && $beta_col != "NA") {print}
+        ' | bgzip > ${base}_filtered.tsv.gz
+        tabix -s 1 -b 2 -e 2 ${base}_filtered.tsv.gz
+
+    >>>
+
+    output {
+        File filtered_meta_out = base + "_filtered.tsv.gz"
+        File filtered_meta_out_tbi = base + "_filtered.tsv.gz.tbi"
     }
 
-    call combine_chrom_metas {
-        input: pheno=pheno, meta_outs=run_range.out
-    }
-
-    call meta_qq {
-        input: meta_out=combine_chrom_metas.meta_out
+    runtime {
+        docker: "${docker}"
+        cpu: "1"
+        memory: "2 GB"
+        disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
+        zones: "europe-west1-b"
+        preemptible: 0
+        noAddress: true
     }
 }

@@ -1,11 +1,14 @@
 {
     "meta_analysis.sumstats_loc": "gs://r6_data/ukb_est_meta/conf/sumstat_files.txt",
     "meta_analysis.pheno_confs": "gs://r6_data/ukb_est_meta/conf/conf_jsons.txt",
-    "meta_analysis.run_meta.run_range.docker": "gcr.io/finngen-refinery-dev/meta:jm-5",
+    "meta_analysis.run_meta.run_range.docker": "gcr.io/finngen-refinery-dev/meta:jm-6",
     "meta_analysis.run_meta.run_range.method": "inv_var",
     "meta_analysis.run_meta.run_range.opts": "--is_het_test --dont_allow_space",
-    "meta_analysis.run_meta.combine_chrom_metas.docker": "gcr.io/finngen-refinery-dev/meta:jm-5",
+    "meta_analysis.run_meta.combine_chrom_metas.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5",
+    "meta_analysis.run_meta.add_rsids.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5",
+    "meta_analysis.run_meta.add_rsids.ref_file": "gs://autoreporting_resources/dbsnp_vcf/dbsnp_hg38p13_b153_numerical.vcf.gz",
+    "meta_analysis.run_meta.meta_qq.docker": "gcr.io/finngen-refinery-dev/meta:jm-6",
     "meta_analysis.run_meta.meta_qq.pvals_to_plot": "all_inv_var_meta_p,all_inv_var_het_p",
     "meta_analysis.run_meta.meta_qq.loglog_ylim": 20,
-    "meta_analysis.run_meta.meta_qq.docker": "gcr.io/finngen-refinery-dev/meta:jm-5"
+    "meta_analysis.run_meta.post_filter.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5"
 }
