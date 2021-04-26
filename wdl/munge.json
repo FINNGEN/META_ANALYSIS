@@ -9,7 +9,7 @@
     "munge.clean_filter.beta_col": "beta",
     "munge.clean_filter.se_col": "sebeta",
     "munge.clean_filter.pval_col": "pval",
-    "munge.lift.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "munge.lift.docker": "eu.gcr.io/finngen-refinery-dev/lift-docker:0.1",
     "munge.lift.b37_ref": "gs://juham-fg/lift/plink.chr21.GRCh37.map.txt",
     "munge.lift.b38_ref": "gs://juham-fg/lift/plink.chr21.GRCh38.map.txt",
     "munge.harmonize.docker": "gcr.io/finngen-refinery-dev/meta:jm-6",
