@@ -1,0 +1,20 @@
+{
+    "munge.sumstats_loc": "gs://hypothyroidism/fg_ukbb/202104/finngen_thyroid_sumstats.txt",
+    "munge.clean_filter.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "munge.clean_filter.chr_col": "#chrom",
+    "munge.clean_filter.pos_col": "pos",
+    "munge.clean_filter.ref_col": "ref",
+    "munge.clean_filter.alt_col": "alt",
+    "munge.clean_filter.af_col": "af_alt",
+    "munge.clean_filter.beta_col": "beta",
+    "munge.clean_filter.se_col": "sebeta",
+    "munge.clean_filter.pval_col": "pval",
+    "munge.lift.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "munge.lift.b37_ref": "gs://juham-fg/lift/plink.chr21.GRCh37.map.txt",
+    "munge.lift.b38_ref": "gs://juham-fg/lift/plink.chr21.GRCh38.map.txt",
+    "munge.harmonize.docker": "gcr.io/finngen-refinery-dev/meta:jm-6",
+    "munge.harmonize.gnomad_ref": "gs://gnomad3/genomes_3.0/ref/filter/gnomad_v3_b38_ref_fin.gz",
+    "munge.harmonize.options": "",
+    "munge.plot.docker": "gcr.io/finngen-refinery-dev/meta:jm-6",
+    "munge.plot.loglog_ylim": 20
+}
