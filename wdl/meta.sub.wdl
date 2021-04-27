@@ -235,7 +235,6 @@ task meta_qq {
         set -euxo pipefail
 
         # Strip unnecessary columns for qqplot.R
-        # TODO: Empty output
         python3 <<EOF > ${base}
 
         import gzip
