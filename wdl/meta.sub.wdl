@@ -81,7 +81,7 @@ task run_range {
         cpu: 1
         memory: "2 GB"
         disks: "local-disk 50 HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 1
         noAddress: true
     }
@@ -121,7 +121,7 @@ task combine_chrom_metas {
         cpu: 1
         memory: "2 GB"
         disks: "local-disk 50 HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 1
         noAddress: true
     }
@@ -212,7 +212,7 @@ task add_rsids {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 2*ceil(size(meta_file, "G") + size(ref_file, "G")) + " SSD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 0
         noAddress: true
     }
@@ -266,7 +266,7 @@ task meta_qq {
         cpu: "1"
         memory: "20 GB"
         disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 0
         noAddress: true
     }
@@ -304,7 +304,7 @@ task post_filter {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 0
         noAddress: true
     }

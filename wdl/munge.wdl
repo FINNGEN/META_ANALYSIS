@@ -128,7 +128,7 @@ task clean_filter {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
     }
@@ -207,7 +207,7 @@ task lift {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
     }
@@ -255,7 +255,7 @@ task harmonize {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G") + size(gnomad_ref, "G")) + " HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
     }
@@ -307,7 +307,7 @@ task plot {
         cpu: "1"
         memory: "20 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
     }
