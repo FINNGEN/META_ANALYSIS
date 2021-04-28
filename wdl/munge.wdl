@@ -97,7 +97,7 @@ task clean_filter {
             }' | \
         sort -k$chr_col,${dollar}{chr_col}g -k$pos_col,${dollar}{pos_col}g | \
         bgzip > ${outfile}
-        tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ${outfile}
+        tabix -s $chr_col -b $pos_col -e $pos_col ${outfile}
 
         echo "`date` new number of variants"
         gunzip -c ${outfile} | tail -n+2 | wc -l
@@ -240,7 +240,8 @@ task harmonize {
         echo "`date` harmonizing stats with gnomAD"
         python3 /META_ANALYSIS/scripts/harmonize.py ${base} ${gnomad_ref_base} ${options} \
         | bgzip > ${base}.${gnomad_ref_base}
-        tabix -S 1 -s 1 -b 2 -e 2 ${base}.${gnomad_ref_base}
+        
+        tabix -s 1 -b 2 -e 2 ${base}.${gnomad_ref_base}
         echo "`date` done"
 
     >>>
