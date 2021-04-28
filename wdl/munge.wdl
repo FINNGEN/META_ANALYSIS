@@ -95,7 +95,7 @@ task clean_filter {
                     printf "\n"
                 }
             }' | \
-        sort -k$chr_col,${dollar}{chr_col}g -k$pos_col,${dollar}{pos_col}g -u | \
+        sort -k$chr_col,${dollar}{chr_col}g -k$pos_col,${dollar}{pos_col}g | \
         bgzip > ${outfile}
         tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ${outfile}
 
