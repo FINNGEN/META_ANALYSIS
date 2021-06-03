@@ -291,13 +291,14 @@ class Study:
         chrom: a chromosome to limit to or None if all chromosomes
         dont_allow_space: boolean, don't treat space as field delimiter (only tab)
         '''
-        self.conf =conf
+        self.conf = conf
         self.chrom = chrord[chrom] if chrom is not None else None
         self.dont_allow_space = dont_allow_space
         self.future = deque()
-        self.eff_size= None
+        self.eff_size = None
         self.z_scr = None
         self.prev_var = None
+        self.header = None
         for v in Study.REQUIRED_CONF:
             if v not in self.conf:
                 raise Exception("Meta configuration for study must contain required elements: "
@@ -320,26 +321,26 @@ class Study:
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
         if self.dont_allow_space:
-            header = conf["fpoint"].readline().rstrip().split('\t')
+            self.header = conf["fpoint"].readline().rstrip().split('\t')
         else:
-            header = conf["fpoint"].readline().rstrip().split()
+            self.header = conf["fpoint"].readline().rstrip().split()
 
         for k in Study.REQUIRED_DATA_FIELDS.keys():
-            if self.conf[k] not in header:
-                raise Exception("Required headers not in data in study " + self.conf["name"] + ". Missing:" + ",".join([ self.conf[k] for k in Study.REQUIRED_DATA_FIELDS.keys() if self.conf[k] not in header])  )
-        self.conf["h_idx"] = { k:header.index( self.conf[k] ) for k in Study.REQUIRED_DATA_FIELDS.keys() }
+            if self.conf[k] not in self.header:
+                raise Exception("Required headers not in data in study " + self.conf["name"] + ". Missing:" + ",".join([ self.conf[k] for k in Study.REQUIRED_DATA_FIELDS.keys() if self.conf[k] not in self.header])  )
+        self.conf["h_idx"] = { k:self.header.index( self.conf[k] ) for k in Study.REQUIRED_DATA_FIELDS.keys() }
 
         for f in Study.OPTIONAL_FIELDS.keys():
             if f in self.conf:
-                 if self.conf[f] not in header:
+                 if self.conf[f] not in self.header:
                      raise Exception("Configured column " + self.conf[f] + " not found in the study results " + self.conf["name"])
-                 self.conf["h_idx"][f] = header.index(self.conf[f])
+                 self.conf["h_idx"][f] = self.header.index(self.conf[f])
 
         if "extra_cols" in self.conf:
             for c in self.conf["extra_cols"]:
-                if c not in header:
+                if c not in self.header:
                     raise Exception("Configured column " + self.conf[c] + " not found in the study results " + self.conf["name"])
-                self.conf["h_idx"][c] = header.index(c)
+                self.conf["h_idx"][c] = self.header.index(c)
         else:
              self.conf["extra_cols"] = []
 
@@ -358,6 +359,7 @@ class Study:
         if self.eff_size is None:
             self.eff_size = ( (4 * self.n_cases *  self.n_controls  ) / ( self.n_cases+  self.n_controls ))
         return self.eff_size
+
     @property
     def name(self):
         return self.conf["name"]
@@ -401,6 +403,10 @@ class Study:
                     l = l.rstrip().split('\t')
                 else:
                     l = l.rstrip().split()
+
+                if len(l) != len(self.header):
+                    raise Exception("Number of fields in header and line do not match for study " + self.name + " in file " + self.conf['file'] + ".\nOffending line: " + "\t".join(l))
+
                 chr = l[self.conf["h_idx"]["chr"]]
                 chr = chrord[chr] if chr in chrord else None
                 ref = l[self.conf["h_idx"]["ref"]]
@@ -418,7 +424,7 @@ class Study:
             try:
                 pval = float(pval)
                 eff = float(eff)
-            except Exception as e:
+            except:
                 pval = None
                 eff = None
 
@@ -430,7 +436,7 @@ class Study:
             v = VariantData(chr,pos,ref,alt, eff, pval, se, extracols)
 
             if self.prev_var is not None and v < self.prev_var:
-                raise Exception("Disorder in study " + self.conf['name'] + " in file " + self.conf['file'] + ". Sort all summary statistic files by chromosome and then position and rerun.\nOffending line: " + "\t".join(l))
+                raise Exception("Disorder in study " + self.name + " in file " + self.conf['file'] + ". Sort all summary statistic files by chromosome and then position and rerun.\nOffending line: " + "\t".join(l))
             self.prev_var = v
             if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
                 added=False
@@ -506,7 +512,6 @@ def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
     """
 
     studies_conf = json.load(open(conf,'r'))
-    std_list = studies_conf["meta"]
 
     return [ Study(s, chrom, dont_allow_space) for s in studies_conf["meta"]]
 
@@ -614,22 +619,14 @@ def run():
     parser = argparse.ArgumentParser(description="Run x-way meta-analysis")
     parser.add_argument('config_file', action='store', type=str, help='Configuration file ')
     parser.add_argument('path_to_res', action='store', type=str, help='Result file')
-
     parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
             + 'Allowed values [n,inv_var,variance]', default="inv_var")
 
     parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
-    parser.set_defaults(quiet=True)
-
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
-    parser.set_defaults(leave_one_out=False)
-
     parser.add_argument('--is_het_test', action='store_true', help='Do heterogeneity tests based on Cochrans Q and output het_p')
-    parser.set_defaults(het_test=False)
-
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
     parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
-
     parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
 
     args = parser.parse_args()
