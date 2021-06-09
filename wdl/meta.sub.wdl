@@ -234,24 +234,6 @@ task meta_qq {
 
         set -euxo pipefail
 
-        # Strip unnecessary columns for qqplot.R
-        python3 <<EOF > ${base}
-
-        import gzip
-
-        pval_cols = [i.strip() for i in '${pvals_to_plot}'.split(',')]
-
-        cols_to_print = ['#CHR', 'POS'] + pval_cols
-
-        with gzip.open('${meta_file}', 'rt') as f:
-            h_idx = {h:i for i,h in enumerate(f.readline().strip().split('\t'))}
-            print('\t'.join(cols_to_print))
-            for line in f:
-                s = line.strip().split('\t')
-                print('\t'.join([s[h_idx[i]] for i in cols_to_print]))
-
-        EOF
-
         /META_ANALYSIS/scripts/qqplot.R --file ${base} --bp_col "POS" --chrcol "#CHR" --pval_col ${pvals_to_plot} --loglog_ylim ${loglog_ylim}
 
     >>>
