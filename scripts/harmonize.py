@@ -196,7 +196,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
             if len(equal) > 0:
                 best_fc = 1e9
                 for i,fc in enumerate(fcs):
-                    if abs(fc-1) < best_fc:
+                    if abs(fc-1) < best_fc or (abs(fc-1) == best_fc and equal[i].ref == var.ref and equal[i].alt == var.alt):
                         best_fc = abs(fc-1)
                         best_fc_idx = i
                 var.equalize_to(equal[best_fc_idx])
