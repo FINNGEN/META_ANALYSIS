@@ -148,7 +148,7 @@ task lift {
 
     command <<<
 
-        set -eux
+        set -euxo pipefail
 
         echo "GWAS meta-analysis - lift over sumstats if needed"
         echo "${sumstat_file}"
@@ -172,9 +172,7 @@ task lift {
 
         if ((`cat b37.txt` > `cat b38.txt`)); then
             echo "`date` lifting to build 38"
-            time lift.py -chr "#CHR" -pos POS -ref REF -alt ALT \
-            -chain_file hg19ToHg38.over.chain.gz -tmp_path /cromwell_root/ \
-            ${base} > ${base}.lift.out 2> ${base}.lift.err
+            time lift.py --info '#CHR' POS REF ALT --chainfile /hg19ToHg38.over.chain.gz --temp_dir /cromwell_root/ --no_duplicates ${base}
             gunzip -c ${base}.lifted.gz | \
             cut -f2- | awk '
             BEGIN { FS=OFS="\t" }
@@ -187,6 +185,8 @@ task lift {
             } NR>1 {
                 temp=$a["#CHR"]; $a["#CHR"]=$a["b37_chr"]; $a["b37_chr"]=temp;
                 temp=$a["POS"]; $a["POS"]=$a["b37_pos"]; $a["b37_pos"]=temp;
+                temp=$a["REF"]; $a["REF"]=$a["b37_REF"]; $a["b37_REF"]=temp;
+                temp=$a["ALT"]; $a["ALT"]=$a["b37_ALT"]; $a["b37_ALT"]=temp;
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
                 if ($a["#CHR"] ~ /^[0-9]+$/) {
                     print $0
@@ -200,13 +200,14 @@ task lift {
 
     output {
         File out = base
+        File lift_errors = "errors"
     }
 
     runtime {
         docker: "${docker}"
         cpu: "1"
         memory: "2 GB"
-        disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
+        disks: "local-disk " + 10*ceil(size(sumstat_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
@@ -280,7 +281,7 @@ task plot {
         BEGIN {FS=OFS="\t"}
         NR==1 {for(i=1;i<=NF;i++) { a[$i]=i; if ($i=="#CHR" || $i=="POS" || $i=="pval" || $i=="af_gnomad" || $i=="af_alt") b[i]=1}}
         {sep=""; for(i=1;i<=NF;i++) if (b[i]==1) { printf sep""$i; sep="\t"} printf "\n"}
-        ' | bgzip > ${base} && \
+        ' | bgzip > ${base}
 
         Rscript - <<EOF
         require(ggplot2)
