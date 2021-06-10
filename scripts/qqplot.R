@@ -38,16 +38,16 @@ print(str(opt))
 bp_col <- opt$options$bp_col
 chr_col <- opt$options$chrcol
 
-print(summary(data))
-print( summary( data[[chr_col]] ) )
-#colnames(data) <- toupper( colnames(data) )
-
 pcols <- unlist(strsplit(opt$options$pval_col,","))
 
 file <- opt$options$file
 print(paste("reading file:", file))
 
 data <- fread(file, header=T, select=c(pcols,c(bp_col,chr_col)))
+
+print(summary(data))
+print( summary( data[[chr_col]] ) )
+#colnames(data) <- toupper( colnames(data) )
 
 output_prefix=file
 
