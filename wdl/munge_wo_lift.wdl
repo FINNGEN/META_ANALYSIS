@@ -199,7 +199,7 @@ task plot {
         require(ggplot2)
         require(data.table)
         options(bitmapType='cairo')
-        data <- fread("${base}")
+        data <- fread("${base}", select=c("#CHR", "POS", "pval", "af_gnomad", "af_alt"), header=T)
         png("${base}_AF.png", width=1000, height=1000, units="px")
         p <- ggplot(data, aes_string(x="af_alt", y="af_gnomad")) +
           geom_point(alpha=0.1) +
