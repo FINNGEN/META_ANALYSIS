@@ -37,6 +37,7 @@ workflow run_meta {
 
     output {
         File meta_out = combine_chrom_metas.meta_out
+        File meta_with_rsids_out = add_rsids.meta_out
         File filtered_meta_out = post_filter.filtered_meta_out
         Array[File] pngs = meta_qq.pngs
         Array[File] lambdas = meta_qq.lambdas
@@ -228,11 +229,13 @@ task meta_qq {
 
     File meta_file
 
-    String base = basename(meta_file, ".tsv.gz")
+    String base = basename(meta_file)
 
     command <<<
 
         set -euxo pipefail
+
+        mv ${meta_file} ${base}
 
         /META_ANALYSIS/scripts/qqplot.R --file ${base} --bp_col "POS" --chrcol "#CHR" --pval_col ${pvals_to_plot} --loglog_ylim ${loglog_ylim}
 

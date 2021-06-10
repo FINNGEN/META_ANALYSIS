@@ -19,6 +19,7 @@ workflow meta_analysis {
 
     output {
         Array[File] metas = run_meta.meta_out
+        Array[File] metas_with_rsids = run_meta.meta_with_rsids_out
         Array[File] filtered_metas = run_meta.filtered_meta_out
         Array[Array[File]] meta_pngs = run_meta.pngs
         Array[Array[File]] meta_lambdas = run_meta.lambdas
