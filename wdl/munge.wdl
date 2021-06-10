@@ -277,17 +277,13 @@ task plot {
 
         set -euxo pipefail
 
-        gunzip -c ${sumstat_file} | awk '
-        BEGIN {FS=OFS="\t"}
-        NR==1 {for(i=1;i<=NF;i++) { a[$i]=i; if ($i=="#CHR" || $i=="POS" || $i=="pval" || $i=="af_gnomad" || $i=="af_alt") b[i]=1}}
-        {sep=""; for(i=1;i<=NF;i++) if (b[i]==1) { printf sep""$i; sep="\t"} printf "\n"}
-        ' | bgzip > ${base}
+        mv ${sumstat_file} ${base}
 
         Rscript - <<EOF
         require(ggplot2)
         require(data.table)
         options(bitmapType='cairo')
-        data <- fread("${base}")
+        data <- fread("${base}", select=c("#CHR", "POS", "pval", "af_gnomad", "af_alt"), header=T)
         png("${base}_AF.png", width=1000, height=1000, units="px")
         p <- ggplot(data, aes_string(x="af_alt", y="af_gnomad")) +
           geom_point(alpha=0.1) +
