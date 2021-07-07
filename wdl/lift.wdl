@@ -126,7 +126,8 @@ task lift {
             -O ${base}.GRCh38.vcf \
             --CHAIN ${chainfile} \
             --REJECT rejected_variants.vcf \
-            -R ${b38_assembly_fasta}
+            -R ${b38_assembly_fasta} \
+            --MAX_RECORDS_IN_RAM 500000
         
         bgzip ${base}.GRCh38.vcf > ${base}.GRCh38.vcf.gz
         bgzip rejected_variants.vcf > rejected_variants.vcf.gz
@@ -146,7 +147,7 @@ task lift {
     runtime {
         docker: "${docker}"
         cpu: "1"
-        memory: "16 GB"
+        memory: "32 GB"
         disks: "local-disk " + 10*ceil(size(sumstat_vcf, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
