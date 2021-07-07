@@ -23,6 +23,7 @@ task sumstat_to_vcf {
     File sumstat_file
 
     String docker
+    String delim
     String chr_col
     String pos_col
     String ref_col
@@ -33,6 +34,8 @@ task sumstat_to_vcf {
 
     command <<<
 
+        set -euxo pipefail
+
         echo "`date` converting sumstat to vcf"
 
         python3 <<EOF | bgzip > ${base}.vcf.gz
@@ -42,6 +45,7 @@ task sumstat_to_vcf {
         from collections import defaultdict
 
         sumstat = "${sumstat_file}"
+        delim = "${delim}"
         chr_col = "${chr_col}"
         pos_col = "${pos_col}"
         ref_col = "${ref_col}"

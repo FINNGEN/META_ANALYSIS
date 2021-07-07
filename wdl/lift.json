@@ -1,6 +1,7 @@
 {
     "liftover.sumstats_loc": "gs://juham-fg/lift/test/test_sumstats.txt",
     "liftover.sumstat_to_vcf.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "liftover.sumstat_to_vcf.delim": "\t",
     "liftover.sumstat_to_vcf.chr_col": "#chr",
     "liftover.sumstat_to_vcf.pos_col": "pos",
     "liftover.sumstat_to_vcf.ref_col": "ref",
