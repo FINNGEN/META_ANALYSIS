@@ -129,19 +129,19 @@ task lift {
             -R ${b38_assembly_fasta} \
             --MAX_RECORDS_IN_RAM 500000
         
-        bgzip ${base}.GRCh38.vcf > ${base}.GRCh38.vcf.gz
-        bgzip rejected_variants.vcf > rejected_variants.vcf.gz
+        #bgzip ${base}.GRCh38.vcf > ${base}.GRCh38.vcf.gz
+        #bgzip rejected_variants.vcf > rejected_variants.vcf.gz
 
-        tabix -s 1 -b 2 -e 2 ${base}.GRCh38.vcf.gz
-        tabix -s 1 -b 2 -e 2 rejected_variants.vcf.gz
+        #tabix -s 1 -b 2 -e 2 ${base}.GRCh38.vcf.gz
+        #tabix -s 1 -b 2 -e 2 rejected_variants.vcf.gz
 
     >>>
 
     output {
-        File lifted_variants = base + ".GRCh38.vcf.gz"
-        File lifted_variants_tbi = base + ".GRCh38.vcf.gz.tbi"
-        File rejected_variants = "rejected_variants.vcf.gz"
-        File rejected_variants_tbi = "rejected_variants.vcf.gz.tbi"
+        File lifted_variants = base + ".GRCh38.vcf"
+        #File lifted_variants_tbi = base + ".GRCh38.vcf.gz.tbi"
+        File rejected_variants = "rejected_variants.vcf"
+        #File rejected_variants_tbi = "rejected_variants.vcf.gz.tbi"
     }
 
     runtime {
