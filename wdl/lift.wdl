@@ -1,4 +1,4 @@
-workflow munge {
+workflow liftover {
 
     File sumstats_loc
     Array[String] sumstat_files = read_lines(sumstats_loc)
