@@ -79,7 +79,7 @@ task sumstat_to_vcf {
                 if chr == '25':
                     chr = 'M'
                 if chr[:3] != 'chr':
-                    'chr' + chr
+                    chr = 'chr' + chr
 
                 pos = s[h_idx[pos_col]]
                 ref = s[h_idx[ref_col]]
