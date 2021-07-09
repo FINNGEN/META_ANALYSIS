@@ -70,7 +70,7 @@ class Variant():
 
 class VariantData(Variant):
 
-    def __init__(self, chr, pos, ref, alt, af, beta, extra_cols=[], gnomad_af=None, af_abs_diff=None, gnomad_filt="NA"):
+    def __init__(self, chr, pos, ref, alt, af, beta, extra_cols=[], gnomad_af=None, af_fc=None, gnomad_filt="NA"):
         self.chr = int(chr)
         self.pos = int(float(pos))
         self.ref = ref.strip().upper()
@@ -79,7 +79,7 @@ class VariantData(Variant):
         self.beta = float(beta) if beta != 'NA' else None
         self.extra_cols = extra_cols
         self.gnomad_af = gnomad_af
-        self.af_abs_diff = af_abs_diff
+        self.af_fc = af_fc
         self.gnomad_filt = gnomad_filt
 
     def equalize_to(self, other:'Variant') -> bool:
@@ -131,7 +131,7 @@ class VariantData(Variant):
     def __str__(self):
         cols = [str(self.chr), str(self.pos), self.ref, self.alt, str(self.af), str(self.beta)]
         cols.extend(self.extra_cols)
-        cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_abs_diff, 3), self.gnomad_filt])
+        cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_fc, 3), self.gnomad_filt])
         return '\t'.join(cols)
 
 def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an):
@@ -150,7 +150,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
     with gzip.open(file_in, 'rt') as f:
         h_idx = {h:i for i,h in enumerate(f.readline().strip().split('\t'))}
         extra_cols = [h for h in h_idx if not h in required_cols]
-        print('\t'.join(required_cols + extra_cols + ['af_gnomad','af_abs_diff','filt_gnomad']))
+        print('\t'.join(required_cols + extra_cols + ['af_gnomad','af_fc','filt_gnomad']))
         for line in f:
             s = line.strip().split('\t')
             var = VariantData(chr = s[h_idx[chr_col]].replace('chr', '').replace('X', '23').replace('Y', '24'),
@@ -185,13 +185,17 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
 
             equal = []
             diffs = []
+            fcs = []
             for r in ref_vars:
                 if var.equalize_to(r) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
                     diff = 1e9
+                    fc = 1e9
                     if r.af is not None and var.af is not None:
                         diff = abs(var.af - float(r.af))
+                        fc = var.af/float(r.af) if float(r.af) != 0 else 1e9
                     equal.append(r)
                     diffs.append(diff)
+                    fcs.append(fc)
 
             if len(equal) > 0:
                 best_diff = 1e9
@@ -201,7 +205,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                         best_diff_idx = i
                 var.equalize_to(equal[best_diff_idx])
                 var.gnomad_af = equal[best_diff_idx].af
-                var.af_abs_diff = diffs[best_diff_idx] if diffs[best_diff_idx] != 1e9 else None
+                var.af_fc = fcs[best_diff_idx] if fcs[best_diff_idx] != 1e9 else None
                 var.gnomad_filt = equal[best_diff_idx].filt
 
             if not require_gnomad or len(equal) > 0:
