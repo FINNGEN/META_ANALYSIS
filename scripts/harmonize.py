@@ -148,8 +148,9 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
     ref_h_idx = {h:i for i,h in enumerate(fp_ref.readline().strip().split('\t'))}
 
     with gzip.open(file_in, 'rt') as f:
-        h_idx = {h:i for i,h in enumerate(f.readline().strip().split('\t'))}
-        extra_cols = [h for h in h_idx if not h in required_cols]
+        header = f.readline().strip().split('\t')
+        h_idx = {h:i for i,h in enumerate(header)}
+        extra_cols = [h for h in header if not h in required_cols]
         print('\t'.join(required_cols + extra_cols + ['af_gnomad','af_fc','filt_gnomad']))
         for line in f:
             s = line.strip().split('\t')
