@@ -7,11 +7,19 @@ workflow munge {
         call clean_filter {
             input: sumstat_file=sumstat_file
         }
-        call lift {
+        call sumstat_to_vcf {
             input: sumstat_file=clean_filter.out
         }
+        call lift {
+            input: sumstat_vcf=sumstat_to_vcf.vcf
+        }
+        call lift_postprocess {
+            input:
+                lifted_vcf=lift.lifted_variants_vcf,
+                sumstat_file=clean_filter.out
+        }
         call harmonize {
-            input: sumstat_file=lift.out
+            input: sumstat_file=lift_postprocess.lifted_variants
         }
         call plot {
             input: sumstat_file=harmonize.out
@@ -20,7 +28,8 @@ workflow munge {
 
     output {
         Array[File] filtered_sumstats = clean_filter.out
-        Array[File] lifted_sumstats = lift.out
+        Array[File] lifted_sumstats = lift_postprocess.lifted_variants
+        Array[File] rejected_variants = lift.rejected_variants
         Array[File] harmonized_sumstats = harmonize.out
         Array[Array[File]] plots = plot.pngs
     }
@@ -134,80 +143,243 @@ task clean_filter {
     }
 }
 
-# liftover to 38 if needed
-task lift {
+# Convert sumstat to vcf for liftover
+task sumstat_to_vcf {
 
     File sumstat_file
 
     String docker
-    File b37_ref
-    File b38_ref
 
-    File tbi_file = sumstat_file + ".tbi"
-    String base = basename(sumstat_file)
+    String base = basename(sumstat_file, ".gz")
 
     command <<<
 
         set -euxo pipefail
 
-        echo "GWAS meta-analysis - lift over sumstats if needed"
-        echo "${sumstat_file}"
-        echo "${b37_ref}"
-        echo "${b38_ref}"
-        echo ""
+        echo "`date` converting sumstat to vcf"
 
-        mv ${sumstat_file} ${base}
-        mv ${tbi_file} ${base}.tbi
+        python3 <<EOF | bgzip > ${base}.vcf.gz
 
-        tabix -R ${b37_ref} ${base} | wc -l > b37.txt
-        tabix -R ${b38_ref} ${base} | wc -l > b38.txt
+        from datetime import date
+        import gzip
+        from collections import defaultdict
 
-        echo "`date` `cat b37.txt` chr 21 variants build 37"
-        echo "`date` `cat b38.txt` chr 21 variants build 38"
+        sumstat = '${sumstat_file}'
+        delim = '\t'
+        chr_col = '#CHR'
+        pos_col = 'POS'
+        ref_col = 'REF'
+        alt_col = 'ALT'
 
-        if ((`cat b37.txt` == 0 && `cat b38.txt` == 0)); then
-            echo "`date` no chr 21 variants found in either build, quitting"
-            exit 1
-        fi
+        print('##fileformat=VCFv4.0')
 
-        if ((`cat b37.txt` > `cat b38.txt`)); then
-            echo "`date` lifting to build 38"
-            time lift.py --info '#CHR' POS REF ALT --chainfile /hg19ToHg38.over.chain.gz --temp_dir /cromwell_root/ --no_duplicates ${base}
-            gunzip -c ${base}.lifted.gz | \
-            cut -f2- | awk '
-            BEGIN { FS=OFS="\t" }
-            NR==1 {
-                for (i=1;i<=NF;i++) {
-                    sub("^anew_", "b37_", $i)
-                    a[$i]=i;
-                }
-                print $0
-            } NR>1 {
-                temp=$a["#CHR"]; $a["#CHR"]=$a["b37_chr"]; $a["b37_chr"]=temp;
-                temp=$a["POS"]; $a["POS"]=$a["b37_pos"]; $a["b37_pos"]=temp;
-                temp=$a["REF"]; $a["REF"]=$a["b37_REF"]; $a["b37_REF"]=temp;
-                temp=$a["ALT"]; $a["ALT"]=$a["b37_ALT"]; $a["b37_ALT"]=temp;
-                sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
-                if ($a["#CHR"] ~ /^[0-9]+$/) {
-                    print $0
-                }
-            }' | bgzip > ${base}
-        else
-            echo "`date` presumably already in build 38"
-        fi
+        today = date.today()
+        print('##filedate=' + today.strftime('%Y%m%d'))
+
+        header_line = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO']
+        print('\t'.join(header_line))
+
+        with gzip.open(sumstat, 'rt') as f:
+            h_idx = {h:i for i,h in enumerate(f.readline().strip().split(delim))}
+            h_idx = defaultdict(lambda: 1e9, h_idx)
+
+            for line in f:
+                s = line.strip().split(delim)
+                s = {i:v for i,v in enumerate(s)}
+                s = defaultdict(lambda: '.', s)
+
+                chr = str(s[h_idx[chr_col]])
+                if chr == '23':
+                    chr = 'X'
+                if chr == '24':
+                    chr = 'Y'
+                if chr == '25':
+                    chr = 'M'
+                if chr[:3] != 'chr':
+                    chr = 'chr' + chr
+
+                pos = s[h_idx[pos_col]]
+                ref = s[h_idx[ref_col]]
+                alt = s[h_idx[alt_col]]
+                id = ':'.join([chr, pos, ref, alt])
+                qual = '.'
+                filter = '.'
+                info = '.'
+
+                print('\t'.join([chr, pos, id, ref, alt, qual, filter, info]))
+
+        EOF
+
+        tabix -s 1 -b 2 -e 2 ${base}.vcf.gz
 
     >>>
 
     output {
-        File out = base
-        File lift_errors = "errors"
+        File vcf = base + ".vcf.gz"
+        File vcf_tbi = base + ".vcf.gz.tbi"
     }
 
     runtime {
         docker: "${docker}"
         cpu: "1"
         memory: "2 GB"
-        disks: "local-disk " + 10*ceil(size(sumstat_file, "G")) + " HDD"
+        disks: "local-disk " + 3*ceil(size(sumstat_file, "G")) + " HDD"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        preemptible: 2
+        noAddress: true
+    }
+}
+
+
+task lift {
+
+    File sumstat_vcf
+
+    String docker
+    File chainfile
+    File b38_assembly_fasta
+    File b38_assembly_dict
+
+    String base = basename(sumstat_vcf, ".vcf.gz")
+
+    command <<<
+
+        set -euxo pipefail
+
+        echo "`date` lifting to build 38"
+        java -jar /usr/picard/picard.jar LiftoverVcf \
+            -I ${sumstat_vcf} \
+            -O ${base}.GRCh38.vcf \
+            --CHAIN ${chainfile} \
+            --REJECT rejected_variants.vcf \
+            -R ${b38_assembly_fasta} \
+            --MAX_RECORDS_IN_RAM 500000 \
+            --RECOVER_SWAPPED_REF_ALT true
+
+    >>>
+
+    output {
+        File lifted_variants_vcf = base + ".GRCh38.vcf"
+        File rejected_variants = "rejected_variants.vcf"
+    }
+
+    runtime {
+        docker: "${docker}"
+        cpu: "1"
+        memory: "32 GB"
+        disks: "local-disk " + 10*ceil(size(sumstat_vcf, "G")) + " HDD"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        preemptible: 2
+        noAddress: true
+    }
+}
+
+
+task lift_postprocess {
+
+    File lifted_vcf
+    File sumstat_file
+
+    String docker
+
+    String base = basename(lifted_vcf, ".vcf")
+
+    command <<<
+
+        set -euxo pipefail
+
+        # Sort by old positions
+        grep -v "^#" ${lifted_vcf} | tr ":" "\t" | awk '
+        BEGIN{OFS="\t"}
+        { gsub("chr", ""); gsub("X", "23"); gsub("Y", "24"); print $1,$2,$7,$8,$3,$4,$5,$6,$11 }
+        ' | sort -k5,5g -k6,6g > ${base}.tsv
+
+        python3 <<EOF | sort -k1,1g -k2,2g | bgzip > ${base}.tsv.gz
+
+        import gzip
+        from collections import defaultdict
+
+        valid_chrs = [str(i) for i in range(1,25)]
+
+        sumstat = '${sumstat_file}'
+        delim = '\t'
+        chr_col = '#CHR'
+        pos_col = 'POS'
+        ref_col = 'REF'
+        alt_col = 'ALT'
+        af_col = 'af_alt'
+        beta_col = 'beta'
+
+        s_f = gzip.open(sumstat, 'rt')
+        sumstat_header = s_f.readline().strip().split(delim)
+        sumstat_h_idx = {h:i for i,h in enumerate(sumstat_header)}
+        sumstat_h_idx = defaultdict(lambda: None, sumstat_h_idx)
+        sumstat_header.extend(['b37_chr', 'b37_pos', 'b37_ref', 'b37_alt', 'liftover_info'])
+        print(delim.join(sumstat_header))
+        sumstat_chr = 0
+        sumstat_pos = 0
+        sumstat_ref = 'N'
+        sumstat_alt = 'N'
+
+        with open('${base}.tsv', 'rt') as f:
+            for line in f:
+                s = line.strip().split('\t')
+                new_chr = s[0]
+                if new_chr not in valid_chrs:
+                    continue
+                new_pos = s[1]
+                new_ref = s[2]
+                new_alt = s[3]
+                old_chr = int(s[4])
+                old_pos = int(s[5])
+                old_ref = s[6]
+                old_alt = s[7]
+                info = s[8]
+                info_list = info.strip().split(';')
+
+                while sumstat_chr < old_chr or (sumstat_chr == old_chr and sumstat_pos < old_pos):
+                    sumstat_line = s_f.readline().strip().split(delim)
+                    sumstat_chr = int(sumstat_line[sumstat_h_idx[chr_col]].replace('chr', '').replace('X', '23').replace('Y', '24'))
+                    sumstat_pos = int(sumstat_line[sumstat_h_idx[pos_col]])
+                    sumstat_ref = sumstat_line[sumstat_h_idx[ref_col]]
+                    sumstat_alt = sumstat_line[sumstat_h_idx[alt_col]]
+                if sumstat_chr == old_chr and sumstat_pos == old_pos and sumstat_ref == old_ref and sumstat_alt == old_alt:
+                    sumstat_line[sumstat_h_idx[chr_col]] = new_chr
+                    sumstat_line[sumstat_h_idx[pos_col]] = new_pos
+                    sumstat_line[sumstat_h_idx[ref_col]] = new_ref
+                    sumstat_line[sumstat_h_idx[alt_col]] = new_alt
+                    if 'SwappedAlleles' in info:
+                        sumstat_af = sumstat_line[sumstat_h_idx[af_col]] if sumstat_line[sumstat_h_idx[af_col]] != "NA" else None
+                        sumstat_beta = sumstat_line[sumstat_h_idx[beta_col]] if sumstat_line[sumstat_h_idx[beta_col]] != "NA" else None
+                        sumstat_line[sumstat_h_idx[af_col]] = str(1 - float(sumstat_af) if sumstat_af is not None else "NA")
+                        sumstat_line[sumstat_h_idx[beta_col]] = str(-1 * float(sumstat_beta) if sumstat_beta is not None else "NA")
+                    sumstat_line.extend([str(old_chr), str(old_pos), old_ref, old_alt, info])
+                    print(delim.join(sumstat_line))
+                    sumstat_line = s_f.readline().strip().split(delim)
+                    try:
+                        sumstat_chr = int(sumstat_line[sumstat_h_idx[chr_col]].replace('chr', '').replace('X', '23').replace('Y', '24'))
+                        sumstat_pos = int(sumstat_line[sumstat_h_idx[pos_col]])
+                    except ValueError:
+                        break
+                    sumstat_ref = sumstat_line[sumstat_h_idx[ref_col]]
+                    sumstat_alt = sumstat_line[sumstat_h_idx[alt_col]]
+
+        EOF
+
+        tabix -S 1 -s 1 -b 2 -e 2 ${base}.tsv.gz
+
+    >>>
+
+    output {
+        File lifted_variants = base + ".tsv.gz"
+        File lifted_variants_tbi = base + ".tsv.gz.tbi"
+    }
+
+    runtime {
+        docker: "${docker}"
+        cpu: "1"
+        memory: "2 GB"
+        disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
