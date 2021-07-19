@@ -335,7 +335,6 @@ task lift_postprocess {
                 old_ref = s[6]
                 old_alt = s[7]
                 info = s[8]
-                info_list = info.strip().split(';')
 
                 while sumstat_chr < old_chr or (sumstat_chr == old_chr and sumstat_pos < old_pos):
                     sumstat_line = s_f.readline().strip().split(delim)
@@ -348,7 +347,7 @@ task lift_postprocess {
                     sumstat_line[sumstat_h_idx[pos_col]] = new_pos
                     sumstat_line[sumstat_h_idx[ref_col]] = new_ref
                     sumstat_line[sumstat_h_idx[alt_col]] = new_alt
-                    if 'SwappedAlleles' in info:
+                    if old_ref == new_ref and old_alt == new_alt:
                         sumstat_af = sumstat_line[sumstat_h_idx[af_col]] if sumstat_line[sumstat_h_idx[af_col]] != "NA" else None
                         sumstat_beta = sumstat_line[sumstat_h_idx[beta_col]] if sumstat_line[sumstat_h_idx[beta_col]] != "NA" else None
                         sumstat_line[sumstat_h_idx[af_col]] = str(1 - float(sumstat_af) if sumstat_af is not None else "NA")
