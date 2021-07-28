@@ -10,8 +10,8 @@ def generate_json(mapping):
     fg_conf = {
         'name': 'FINNGEN',
         'file': mapping['fg_link'],
-        'n_cases': int(mapping['fg_n_cases']),
-        'n_controls': int(mapping['fg_n_controls']),
+        'n_cases': int(float(mapping['fg_n_cases'])),
+        'n_controls': int(float(mapping['fg_n_controls'])),
         'chr': '#chrom',
         'pos': 'pos',
         'ref': 'ref',
@@ -26,8 +26,8 @@ def generate_json(mapping):
     ukbb_conf = {
         'name': 'UKBB',
         'file': mapping['ukbb_link'],
-        'n_cases': int(mapping['ukbb_n_cases']),
-        'n_controls': int(mapping['ukbb_n_controls']),
+        'n_cases': int(float(mapping['ukbb_n_cases'])),
+        'n_controls': int(float(mapping['ukbb_n_controls'])),
         'chr': '#chr',
         'pos': 'pos',
         'ref': 'ref',
@@ -42,8 +42,8 @@ def generate_json(mapping):
     est_conf = {
         'name': 'ESTBB',
         'file': mapping['estbb_link'],
-        'n_cases': int(mapping['estbb_n_cases']),
-        'n_controls': int(mapping['estbb_n_controls']),
+        'n_cases': int(float(mapping['estbb_n_cases'])),
+        'n_controls': int(float(mapping['estbb_n_controls'])),
         'chr': '#CHR',
         'pos': 'POS',
         'ref': 'REF',
