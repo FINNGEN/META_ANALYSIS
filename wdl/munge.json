@@ -15,9 +15,9 @@
     "munge.lift.b38_assembly_fasta": "gs://juham-fg/lift/broad/Homo_sapiens_assembly38.fasta",
     "munge.lift.b38_assembly_dict": "gs://juham-fg/lift/broad/Homo_sapiens_assembly38.dict",
     "munge.lift_postprocess.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
-    "munge.harmonize.docker": "gcr.io/finngen-refinery-dev/meta:jm-7",
+    "munge.harmonize.docker": "gcr.io/finngen-refinery-dev/meta:b33b946",
     "munge.harmonize.gnomad_ref": "gs://gnomad3/genomes_3.0/ref/filter/gnomad_v3_b38_ref_nfe.gz",
     "munge.harmonize.options": "",
-    "munge.plot.docker": "gcr.io/finngen-refinery-dev/meta:jm-7",
+    "munge.plot.docker": "gcr.io/finngen-refinery-dev/meta:b33b946",
     "munge.plot.loglog_ylim": 20
 }
