@@ -185,25 +185,29 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                     ref_has_lines = False
 
             equal = []
+            diffs = []
             fcs = []
             for r in ref_vars:
                 if var.equalize_to(r) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
+                    diff = 1e9
                     fc = 1e9
                     if r.af is not None and var.af is not None:
-                        fc = var.af/float(r.af) if float(r.af) != 0 else 1e6
+                        diff = abs(var.af - float(r.af))
+                        fc = var.af/float(r.af) if float(r.af) != 0 else 1e9
                     equal.append(r)
+                    diffs.append(diff)
                     fcs.append(fc)
 
             if len(equal) > 0:
-                best_fc = 1e9
-                for i,fc in enumerate(fcs):
-                    if abs(fc-1) < best_fc or (abs(fc-1) == best_fc and equal[i].ref == var.ref and equal[i].alt == var.alt):
-                        best_fc = abs(fc-1)
-                        best_fc_idx = i
-                var.equalize_to(equal[best_fc_idx])
-                var.gnomad_af = equal[best_fc_idx].af
-                var.af_fc = fcs[best_fc_idx] if fcs[best_fc_idx] != 1e9 else None
-                var.gnomad_filt = equal[best_fc_idx].filt
+                best_diff = 1e9
+                for i,diff in enumerate(diffs):
+                    if diff < best_diff or (diff == best_diff and equal[i].ref == var.ref and equal[i].alt == var.alt):
+                        best_diff = diff
+                        best_diff_idx = i
+                var.equalize_to(equal[best_diff_idx])
+                var.gnomad_af = equal[best_diff_idx].af
+                var.af_fc = fcs[best_diff_idx] if fcs[best_diff_idx] != 1e9 else None
+                var.gnomad_filt = equal[best_diff_idx].filt
 
             if not require_gnomad or len(equal) > 0:
                 print(var)
