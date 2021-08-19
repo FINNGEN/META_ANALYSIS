@@ -3,6 +3,12 @@
 import argparse
 import json
 import pandas as pd
+import os
+import subprocess
+import shlex
+
+REQUIRED_COLS = ['fg_phenotype', 'fg_link', 'estbb_link']
+OPTIONAL_COLS = ['fg_n_cases', 'estbb_n_cases', 'fg_n_controls', 'estbb_n_controls']
 
 
 def generate_json(mapping):
@@ -36,34 +42,65 @@ def generate_json(mapping):
         'effect_type': 'beta',
         'pval': 'pval',
         'se': 'sebeta',
-        'extra_cols': ["af_alt", "AF.Cases", "AF.Controls"]
+        'extra_cols': ["af_alt", "AF.Cases", "AF.Controls", "b37_chr", "b37_pos", "b37_ref", "b37_alt", "liftover_info", "af_gnomad", "af_fc"]
     }
 
-    with open(mapping['fg_phenotype'] + '.json', 'w') as out:
+    json_file = 'jsons/' + mapping['fg_phenotype'] + '.json' if os.path.isdir('jsons') else mapping['fg_phenotype'] + '.json'
+    with open(json_file, 'w') as out:
         json.dump({'meta': [fg_conf, est_conf]}, out, indent=4)
 
 
 def run():
 
-    parser = argparse.ArgumentParser(description='Create a json config file for meta-analysis combining results from FinnGen, and EST')
+    parser = argparse.ArgumentParser(description='Create a json config file for meta-analysis combining results from FinnGen and EST')
     parser.add_argument('in_mapping_file', action='store', type=str, help='A tab-delimited text file with phenotype mapping information between studies')
+    parser.add_argument('--bucket', action='store', type=str, help='GCS bucket path')
+    parser.add_argument('--sumstat_filelist_name', action='store', type=str, default='sumstat_files.txt', help='Name of file listing the sumstats')
+    parser.add_argument('--json_filelist_name', action='store', type=str, default='conf_jsons.txt', help='Name of file listing the jsons')
 
     args = parser.parse_args()
 
-    # Read mapping and drop rows with missing values (missing pair)
+    # Check mapping is ok and filter
+    print('Checking mapping...')
     mapping = pd.read_csv(args.in_mapping_file, sep='\t', dtype=object)
+    missing_cols = [col for col in REQUIRED_COLS if col not in mapping.columns]
+    if len(missing_cols) > 0:
+        raise Exception('Missing required columns: ' + ', '.join(missing_cols))
+    for col in OPTIONAL_COLS:
+        if col not in mapping.columns:
+            mapping[col] = 0
     mapping.dropna(axis=0, how='any', inplace=True)
-    #mapping.index = pd.MultiIndex.from_frame(mapping[['fg_phenotype', 'est_phenotype']])
 
     # Print summary stat links to file
-    mapping[['fg_link', 'estbb_link']].to_csv('sumstat_files.txt', header=False, index=False, sep='\t')
+    mapping[['fg_link', 'estbb_link']].to_csv(args.sumstat_filelist_name, header=False, index=False, sep='\t')
 
     # Replace gs prefix with cromwell_root for cromwell run
     mapping['fg_link'] = mapping['fg_link'].replace('^gs:/', '/cromwell_root', regex=True)
     mapping['estbb_link'] = mapping['estbb_link'].replace('^gs:/', '/cromwell_root', regex=True)
 
     # Generate json configs for meta-analysis
+    print('Generating config files...')
+    jsons_dir=False
+    try:
+        os.mkdir('jsons')
+        jsons_dir=True
+    except OSError as error:
+        print(error)
     mapping.apply(generate_json, axis=1)
+
+    if args.bucket is not None:
+        with open(args.json_filelist_name, 'w') as f:
+            for pheno in mapping['fg_phenotype']:
+                f.write(os.path.join(args.bucket, 'jsons', pheno) + '.json\n')
+        print(f'Transferring files to bucket {args.bucket} ...')
+        cmd_1 = f'gsutil cp {args.sumstat_filelist_name} {args.bucket}'
+        cmd_2 = f'gsutil cp {args.json_filelist_name} {args.bucket}'
+        cmd_3 = f'gsutil -m cp -r jsons/ {args.bucket}'
+        subprocess.run(shlex.split(cmd_1))
+        subprocess.run(shlex.split(cmd_2))
+        subprocess.run(shlex.split(cmd_3))
+    
+    print('Done.')
 
 
 if __name__ == '__main__':
