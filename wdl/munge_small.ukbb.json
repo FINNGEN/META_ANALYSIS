@@ -1,0 +1,4 @@
+{
+    "munge_small.sumstats_loc":"gs://juham-fg/meta-analysis/to_munge",
+    "munge_small.filter.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.6"
+}
