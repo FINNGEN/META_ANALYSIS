@@ -711,28 +711,26 @@ def run():
                 else:
                     outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*3 if args.pairwise_with_first and i>0 else 0) ) )
 
-            meta_res = []
+            outdat.append( str(len(matching_studies)) )
+
             if len( matching_studies )>1:
                 met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
                 for m in met:
                     if m is not None:
                         if args.is_het_test:
-                            meta_res.extend([format_num(num) for num in m[0:4]])
+                            outdat.extend([format_num(num) for num in m[0:4]])
                         else:
-                            meta_res.extend([format_num(num) for num in m[0:3]])
+                            outdat.extend([format_num(num) for num in m[0:3]])
                     else:
                         if args.is_het_test:
-                            meta_res.extend(['NA'] * 4)
+                            outdat.extend(['NA'] * 4)
                         else:
-                            meta_res.extend(['NA'] * 3)
+                            outdat.extend(['NA'] * 3)
             else:
                 if args.is_het_test:
-                    meta_res.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
+                    outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
                 else:
-                    meta_res.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval)]  * len(methods) )
-
-            outdat.append( str(len(matching_studies)) )
-            outdat.extend(meta_res)
+                    outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval)]  * len(methods) )
             
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
@@ -743,14 +741,14 @@ def run():
                         for m in met:
                             if m is not None:
                                 if args.is_het_test:
-                                    meta_res.extend([format_num(num) for num in m[0:4]])
+                                    outdat.extend([format_num(num) for num in m[0:4]])
                                 else:
-                                    meta_res.extend([format_num(num) for num in m[0:3]])
+                                    outdat.extend([format_num(num) for num in m[0:3]])
                             else:
                                 if args.is_het_test:
-                                    meta_res.extend(['NA'] * 4)
+                                    outdat.extend(['NA'] * 4)
                                 else:
-                                    meta_res.extend(['NA'] * 3)
+                                    outdat.extend(['NA'] * 3)
 
                     elif len(matching_studies_loo) == 1:
                         if args.is_het_test:
