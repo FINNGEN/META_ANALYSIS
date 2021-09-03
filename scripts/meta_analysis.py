@@ -73,7 +73,14 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
     beta_meta=sum_betas/sum_weights
     
     #TODO se
-    return ( beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )), effs_size_org, weights) if len(effs_size)==len(studies) else None
+    return (
+        beta_meta,
+        None,
+        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )),
+        -(scipy.stats.norm.logsf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ) + math.log(2)) / math.log(10),
+        effs_size_org,
+        weights
+    ) if len(effs_size)==len(studies) else None
 
 
 def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
@@ -106,7 +113,14 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
 
     beta_meta=sum(effs_inv_var)/ sum_inv_var
     
-    return (beta_meta, math.sqrt(1/sum_inv_var), max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))), effs_size_org, weights)
+    return (
+        beta_meta,
+        math.sqrt(1/sum_inv_var),
+        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))),
+        -(scipy.stats.norm.logsf( abs(sum(effs_inv_var) / math.sqrt(sum_inv_var)) ) + math.log(2)) / math.log(10),
+        effs_size_org,
+        weights
+    )
 
 
 def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
@@ -143,7 +157,14 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tupl
     beta_meta=sum_betas / sum_weights
     
     #TODO SE
-    return (beta_meta, None, max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))), effs_size_org, weights)
+    return (
+        beta_meta,
+        None,
+        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))),
+        -(scipy.stats.norm.logsf( abs( sum( effs_se ) ) /  math.sqrt(tot_se) ) + math.log(2)) / math.log(10),
+        effs_size_org,
+        weights
+    )
     
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
@@ -531,9 +552,9 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     for m in met:
         if m is not None:
             if is_het_test:
-                meta_res.append((m[0], m[1], m[2], het_test(m[3], m[4], m[0])))
+                meta_res.append((m[0], m[1], m[2], m[3], het_test(m[4], m[5], m[0])))
             else:
-                meta_res.append((m[0], m[1], m[2]))
+                meta_res.append((m[0], m[1], m[2], m[3]))
         else:
             meta_res.append(None)
 
@@ -659,23 +680,23 @@ def run():
 
             if args.pairwise_with_first:
                 for m in methods:
-                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p")
+                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_mlogp")
 
         out.write("\tall_meta_N")
         for m in methods:
             if args.is_het_test:
-                out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p\tall_"+ m +"_het_p")
+                out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp\tall_" + m + "_het_p")
             else:
-                out.write("\tall_"+m+"_meta_beta\tall_"+m+"_meta_sebeta\tall_"+  m +"_meta_p")
+                out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp")
 
         if args.leave_one_out:
             for s in studs:
                 out.write("\t" + "leave_" + s.name + "_N")
                 for m in methods:
                     if args.is_het_test:
-                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_het_p"] ))
+                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp", "leave_" + s.name + "_" + m + "_meta_het_p"] ))
                     else:
-                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p"] ))
+                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp"] ))
 
         out.write("\n")
 
@@ -705,61 +726,49 @@ def run():
                     if next_var[0] is not None:
                         met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods, is_het_test=False)
                         for m in met:
-                            outdat.extend([format_num(num) for num in m[0:3]])
+                            outdat.extend([format_num(num) for num in m[0:4]])
                     else:
-                        outdat.extend(["NA"] * len(methods) * 3)
+                        outdat.extend(["NA"] * len(methods) * 4)
                 else:
-                    outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*3 if args.pairwise_with_first and i>0 else 0) ) )
+                    outdat.extend(['NA']  * (4 + len(studs[i].extra_cols) + (len(methods)*4 if args.pairwise_with_first and i>0 else 0) ) )
 
             outdat.append( str(len(matching_studies)) )
 
-            if len( matching_studies )>1:
-                met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
-                for m in met:
-                    if m is not None:
-                        if args.is_het_test:
-                            outdat.extend([format_num(num) for num in m[0:4]])
-                        else:
-                            outdat.extend([format_num(num) for num in m[0:3]])
+            met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
+            for m in met:
+                if m is not None:
+                    if args.is_het_test:
+                        outdat.extend([format_num(num) for num in m[0:5]])
                     else:
-                        if args.is_het_test:
-                            outdat.extend(['NA'] * 4)
-                        else:
-                            outdat.extend(['NA'] * 3)
-            else:
-                if args.is_het_test:
-                    outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval), 'NA']  * len(methods) )
+                        outdat.extend([format_num(num) for num in m[0:4]])
                 else:
-                    outdat.extend( [format_num(matching_studies[0][1].beta), format_num(matching_studies[0][1].se) , format_num(matching_studies[0][1].pval)]  * len(methods) )
-            
+                    if args.is_het_test:
+                        outdat.extend(['NA'] * 5)
+                    else:
+                        outdat.extend(['NA'] * 4)
+
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
                     matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
                     outdat.append( str(len(matching_studies_loo)) )
-                    if len(matching_studies_loo) > 1:
+                    if len(matching_studies_loo) > 0:
                         met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
                             if m is not None:
                                 if args.is_het_test:
-                                    outdat.extend([format_num(num) for num in m[0:4]])
+                                    outdat.extend([format_num(num) for num in m[0:5]])
                                 else:
-                                    outdat.extend([format_num(num) for num in m[0:3]])
+                                    outdat.extend([format_num(num) for num in m[0:4]])
                             else:
                                 if args.is_het_test:
-                                    outdat.extend(['NA'] * 4)
+                                    outdat.extend(['NA'] * 5)
                                 else:
-                                    outdat.extend(['NA'] * 3)
-
-                    elif len(matching_studies_loo) == 1:
-                        if args.is_het_test:
-                            outdat.extend( [format_num(matching_studies_loo[0][1].beta), format_num(matching_studies_loo[0][1].se) , format_num(matching_studies_loo[0][1].pval), 'NA']  * len(methods) )
-                        else:
-                            outdat.extend( [format_num(matching_studies_loo[0][1].beta), format_num(matching_studies_loo[0][1].se) , format_num(matching_studies_loo[0][1].pval)]  * len(methods) )
+                                    outdat.extend(['NA'] * 4)
                     else:
                         if args.is_het_test:
-                            outdat.extend(['NA'] * 4 * len(methods))
+                            outdat.extend(['NA'] * 5 * len(methods))
                         else:
-                            outdat.extend(['NA'] * 3 * len(methods))
+                            outdat.extend(['NA'] * 4 * len(methods))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
