@@ -670,33 +670,29 @@ def run():
 
     with open( outfile, 'w' ) as out:
 
-        out.write("\t".join(["#CHR","POS","REF","ALT","SNP", studs[0].name + "_beta", studs[0].name + "_sebeta", studs[0].name + "_pval"  ]))
+        out.write("\t".join(["#CHR","POS","REF","ALT","SNP"]))
 
-        out.write( ("\t" if len(studs[0].extra_cols) else "") + "\t".join( [studs[0].name + "_" + c for c in studs[0].extra_cols] ) )
         ## align to leftmost STUDY
-        for oth in studs[1:len(studs)]:
-            out.write( "\t" +  "\t".join( [ oth.name + "_beta", oth.name + "_sebeta", oth.name + "_pval"] ))
-            out.write( ("\t" if len(oth.extra_cols) else "") + "\t".join( [oth.name + "_" + c for c in oth.extra_cols] ) )
-
-            if args.pairwise_with_first:
+        for i,s in enumerate(studs):
+            out.write( "\t" +  "\t".join( [ s.name + "_beta", s.name + "_sebeta", s.name + "_pval"] ))
+            out.write( ("\t" if len(s.extra_cols) else "") + "\t".join( [s.name + "_" + c for c in s.extra_cols] ) )
+            if args.pairwise_with_first and i>0:
                 for m in methods:
-                    out.write("\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_p\t" + studs[0].name + "_" + oth.name + "_" +  m + "_meta_mlogp")
+                    out.write("\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_p\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_mlogp")
 
         out.write("\tall_meta_N")
         for m in methods:
+            out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp")
             if args.is_het_test:
-                out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp\tall_" + m + "_het_p")
-            else:
-                out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp")
+                out.write("\tall_" + m + "_het_p")
 
         if args.leave_one_out:
             for s in studs:
                 out.write("\t" + "leave_" + s.name + "_N")
                 for m in methods:
+                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp"] ))
                     if args.is_het_test:
-                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp", "leave_" + s.name + "_" + m + "_meta_het_p"] ))
-                    else:
-                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp"] ))
+                        out.write("\tleave_" + s.name + "_" + m + "_meta_het_p")
 
         out.write("\n")
 
