@@ -561,7 +561,7 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     return meta_res
 
 def format_num(num, precision=2):
-    return numpy.format_float_scientific(num, precision=precision) if num not in [numpy.nan, None] else "NA"
+    return "NA" if num is None or numpy.isnan(num) else numpy.format_float_scientific(num, precision=precision)
 
 def get_next_variant( studies : List[Study]) -> List[VariantData]:
     '''
