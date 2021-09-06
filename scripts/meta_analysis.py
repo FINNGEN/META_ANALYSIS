@@ -730,7 +730,7 @@ def run():
                     else:
                         outdat.extend(["NA"] * len(methods) * 4)
                 else:
-                    outdat.extend(['NA']  * (4 + len(studs[i].extra_cols) + (len(methods)*4 if args.pairwise_with_first and i>0 else 0) ) )
+                    outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*4 if args.pairwise_with_first and i>0 else 0) ) )
 
             outdat.append( str(len(matching_studies)) )
 
