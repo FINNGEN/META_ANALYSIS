@@ -201,7 +201,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                     diffs.append(diff)
                     fcs.append(fc)
 
-            best_diff = 1e9
+            best_diff = 1
             if len(equal) > 0:
                 for i,diff in enumerate(diffs):
                     if diff < best_diff or (diff == best_diff and equal[i].ref == var.ref and equal[i].alt == var.alt):
@@ -212,7 +212,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 var.af_fc = fcs[best_diff_idx] if fcs[best_diff_idx] != 1e9 else None
                 var.gnomad_filt = equal[best_diff_idx].filt
 
-            if (not require_gnomad or len(equal) > 0) and best_diff < gnomad_max_abs_diff:
+            if (not require_gnomad or len(equal) > 0) and best_diff <= gnomad_max_abs_diff:
                 print(var)
             
 def run():
