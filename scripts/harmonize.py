@@ -192,7 +192,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
             fcs = []
             for r in ref_vars:
                 if var.equalize_to(r) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
-                    diff = 1e9
+                    diff = 1
                     fc = 1e9
                     if r.af is not None and var.af is not None:
                         diff = abs(var.af - float(r.af))
@@ -203,7 +203,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
 
             best_diff = -1
             if len(equal) > 0:
-                best_diff = 1
+                best_diff = 2
                 for i,diff in enumerate(diffs):
                     if diff < best_diff or (diff == best_diff and equal[i].ref == var.ref and equal[i].alt == var.alt):
                         best_diff = diff
