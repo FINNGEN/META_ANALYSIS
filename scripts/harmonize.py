@@ -201,8 +201,9 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                     diffs.append(diff)
                     fcs.append(fc)
 
-            best_diff = 1
+            best_diff = -1
             if len(equal) > 0:
+                best_diff = 1
                 for i,diff in enumerate(diffs):
                     if diff < best_diff or (diff == best_diff and equal[i].ref == var.ref and equal[i].alt == var.alt):
                         best_diff = diff
