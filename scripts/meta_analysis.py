@@ -162,6 +162,9 @@ def flip_strand( allele):
 def is_symmetric(a1, a2):
     return (a1=="A" and a2=="T") or (a1=="T" and a2=="A") or (a1=="C" and a2=="G") or (a1=="G" and a2=="C")
 
+def is_indel(a1, a2):
+    return len(a1)>1 or len(a2)>1
+
 
 class VariantData:
 
@@ -202,6 +205,9 @@ class VariantData:
 
             if self.ref== other.ref and self.alt == other.alt :
                 return True
+            
+            if is_indel(other.ref, other.alt):
+                return False
 
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics. Assumed to be aligned.
@@ -231,7 +237,10 @@ class VariantData:
             flip_alt =  flip_strand(other.alt)
 
             if self.ref== other.ref and self.alt == other.alt :
-                    return True
+                return True
+            
+            if is_indel(other.ref, other.alt):
+                return False
 
             if is_symmetric( other.ref, other.alt ):
                 ## never strandflip symmetrics. Assumed to be aligned.
