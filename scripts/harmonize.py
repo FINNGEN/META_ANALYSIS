@@ -134,10 +134,13 @@ class VariantData(Variant):
         cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_fc, 3), self.gnomad_filt])
         return '\t'.join(cols)
 
-def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an):
+def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff):
 
     if gnomad_min_an is None:
         gnomad_min_an = -1
+    
+    if gnomad_max_abs_diff is None:
+        gnomad_max_abs_diff = 1
 
     required_cols = [chr_col, pos_col, ref_col, alt_col, af_col, beta_col]
     
@@ -209,7 +212,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 var.af_fc = fcs[best_diff_idx] if fcs[best_diff_idx] != 1e9 else None
                 var.gnomad_filt = equal[best_diff_idx].filt
 
-            if not require_gnomad or len(equal) > 0:
+            if (not require_gnomad or len(equal) > 0) and best_diff < gnomad_max_abs_diff:
                 print(var)
             
 def run():
@@ -225,6 +228,7 @@ def run():
     parser.add_argument('--require_gnomad', action='store_true', help='Filter out variants not in gnomAD')
     parser.add_argument('--passing_only', action='store_true', help='Filter out non-passing variants in gnomAD')
     parser.add_argument('--gnomad_min_an', type=int, action='store', help='Minimum AN in gnomAD')
+    parser.add_argument('--gnomad_max_abs_diff', type=float, action='store', help='Maximum absolute difference between variant and gnomAD AF')
     args = parser.parse_args()
     harmonize(file_in = args.file_in,
               file_ref = args.file_ref,
@@ -236,7 +240,8 @@ def run():
               beta_col = args.beta_col,
               require_gnomad = args.require_gnomad,
               passing_only = args.passing_only,
-              gnomad_min_an = args.gnomad_min_an)
+              gnomad_min_an = args.gnomad_min_an,
+              gnomad_max_abs_diff = args.gnomad_max_abs_diff)
     
 if __name__ == '__main__':
     run()
