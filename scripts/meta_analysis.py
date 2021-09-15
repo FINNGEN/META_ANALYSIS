@@ -162,9 +162,6 @@ def flip_strand( allele):
 def is_symmetric(a1, a2):
     return (a1=="A" and a2=="T") or (a1=="T" and a2=="A") or (a1=="C" and a2=="G") or (a1=="G" and a2=="C")
 
-def is_indel(a1, a2):
-    return len(a1)>1 or len(a2)>1
-
 
 class VariantData:
 
@@ -176,7 +173,7 @@ class VariantData:
         self.beta = beta
         self.pval = pval
         self.z_scr = None
-        self.is_indel = None
+        self.indel = None
         try:
             self.se = float(se) if se is not None  else None
         except ValueError:
@@ -255,7 +252,6 @@ class VariantData:
 
         return False
 
-    @property
     def z_score(self):
         '''
             Lazy compute unsigned z-score
@@ -264,16 +260,10 @@ class VariantData:
             self.z_scr = math.sqrt(chi2.isf(self.pval, df=1))
         return self.z_scr
 
-    @property
     def is_indel(self):
-        """Checks if variant is indel
-
-        Returns:
-            True if variant is indel else False
-        """
-
-        self.is_indel = len(self.ref)>1 or len(self.alt)>1 if self.is_indel is None else self.is_indel
-        return self.is_indel
+        if self.indel is None:
+            self.indel = len(self.ref)>1 or len(self.alt)>1
+        return self.indel
 
     def __str__(self):
         return "chr:{} pos:{} ref:{} alt:{} beta:{} pval:{} se:{} ".format(self.chr, self.pos, self.ref, self.alt, self.beta, self.pval, self.se)
