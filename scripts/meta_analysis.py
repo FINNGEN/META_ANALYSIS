@@ -613,11 +613,10 @@ def run():
         Second parameter should be a path to (empty/not existing) directory where the data should be stored
     '''
 
-    parser = argparse.ArgumentParser(description="Run x-way meta-analysis")
+    parser = argparse.ArgumentParser(description='Run x-way meta-analysis')
     parser.add_argument('config_file', action='store', type=str, help='Configuration file ')
     parser.add_argument('path_to_res', action='store', type=str, help='Result file')
-    parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
-            + 'Allowed values [n,inv_var,variance]', default="inv_var")
+    parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas. Allowed values [n,inv_var,variance]', default='inv_var')
 
     parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
@@ -625,7 +624,7 @@ def run():
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
     parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
     parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
-    parser.add_argument('--flip_indels', action='store_true', help='Try variant aligning by flipping indels also.')
+    parser.add_argument('--flip_indels', action='store_true', help='Try variant aligning by flipping indels also. By default indels are not flipped')
 
     args = parser.parse_args()
 

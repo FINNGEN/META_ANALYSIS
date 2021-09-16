@@ -24,8 +24,7 @@ Run x-way meta-analysis
 positional arguments:
   config_file           Configuration file
   path_to_res           Result file
-  methods               List of meta-analysis methods to compute separated by
-                        commas.Allowed values [n,inv_var,variance]
+  methods               List of meta-analysis methods to compute separated by commas. Allowed values [n,inv_var,variance]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -37,6 +36,7 @@ optional arguments:
                         Do pairwise meta-analysis with the first given study
   --dont_allow_space    Do not allow space as field delimiter
   --chrom CHROM         Restrict to given chromosome
+  --flip_indels         Try variant aligning by flipping indels also. By default indels are not flipped
 ```
 
 The configuration file should be a json file with these elements:
