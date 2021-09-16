@@ -252,6 +252,7 @@ class VariantData:
 
         return False
 
+    @property
     def z_score(self):
         '''
             Lazy compute unsigned z-score
@@ -260,6 +261,7 @@ class VariantData:
             self.z_scr = math.sqrt(chi2.isf(self.pval, df=1))
         return self.z_scr
 
+    @property
     def is_indel(self):
         if self.indel is None:
             self.indel = len(self.ref)>1 or len(self.alt)>1
