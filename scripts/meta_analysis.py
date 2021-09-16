@@ -352,7 +352,7 @@ class Study:
 
     @property
     def n_controls(self):
-        return self.conf["n_cases"]
+        return self.conf["n_controls"]
 
     @property
     def effective_size(self):
