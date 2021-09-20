@@ -191,7 +191,7 @@ class VariantData:
                   or (self.chr < other.chr)
                )
 
-    def is_equal(self, other: 'VariantData', equalize: bool = False, flip_indels: bool = False) -> bool:
+    def _equalizer(self, other: 'VariantData', equalize: bool = False, flip_indels: bool = False) -> bool:
         """Checks if two variants are equal
 
         Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles).
@@ -224,11 +224,6 @@ class VariantData:
                 if self.ref == other.ref and self.alt == other.alt:
                     return True
                 elif self.ref == other.alt and self.alt == other.ref:
-                    if equalize:
-                        self.beta = -1 * self.beta if self.beta is not None else None
-                        t = self.alt
-                        self.alt = self.ref
-                        self.ref = t
                     return True
 
             elif (self.ref == other.alt and self.alt == other.ref) :
@@ -251,6 +246,38 @@ class VariantData:
                 return True
 
         return False
+
+    def is_equal(self, other: 'VariantData', flip_indels: bool = False) -> bool:
+        """Checks if two variants are equal
+
+        Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles).
+        
+        Args:
+            other:
+                Variant as VariantData object to compare this variant to.
+            flip_indels:
+                If True will try matching indels with flipping.
+
+        Returns:
+            True if the same or False if not the same variant.
+        """
+        return self._equalizer(other=other, equalize=False, flip_indels=flip_indels)
+
+    def equalize_to(self, other: 'VariantData', flip_indels: bool = False) -> bool:
+        """Checks if two variants are equal and changes this variant's alleles and beta accordingly
+
+        Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles) and changes this variant's alleles and beta accordingly.
+        
+        Args:
+            other:
+                Variant as VariantData object to compare this variant to.
+            flip_indels:
+                If True will try matching indels with flipping.
+
+        Returns:
+            True if the same or False if not the same variant.
+        """
+        return self._equalizer(other=other, equalize=True, flip_indels=flip_indels)
 
     @property
     def z_score(self):
@@ -480,7 +507,7 @@ class Study:
             return None
 
         for i,v in enumerate(otherdats):
-            if v.is_equal(dat, equalize=True, flip_indels=self.flip_indels):
+            if v.equalize_to(dat, flip_indels=self.flip_indels):
                 del otherdats[i]
                 self.put_back(otherdats)
                 return v
@@ -577,12 +604,12 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
                 del dats[i][j]
                 s.put_back(dats[i])
                 break
-            if not v.is_equal(first, equalize=False, flip_indels=s.flip_indels):
+            if not v.is_equal(first, flip_indels=s.flip_indels):
                 s.put_back([v])
                 del dats[i][j]
         if not added:
             for j,v in reversed(list(enumerate(dats[i]))):
-                if v.is_equal(first, equalize=True, flip_indels=s.flip_indels):
+                if v.equalize_to(first, flip_indels=s.flip_indels):
                     res.append(v)
                     added=True
                     del dats[i][j]
