@@ -166,12 +166,14 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                               extra_cols = [s[h_idx[extra_col]] for extra_col in extra_cols])
             ref_vars = []
             while ref_has_lines and ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos):
-                ref_line = fp_ref.readline().strip().split('\t')
-                try:
+                ref_line = fp_ref.readline()
+                if ref_line != '':
+                    r = ref_line.strip().split('\t')
                     ref_chr = int(ref_line[ref_h_idx['#chr']])
                     ref_pos = int(ref_line[ref_h_idx['pos']])
-                except ValueError:
+                else:
                     ref_has_lines = False
+
             while ref_has_lines and ref_chr == var.chr and ref_pos == var.pos:
                 ref_vars.append(Variant(chr = ref_chr,
                                         pos = ref_pos,
@@ -180,11 +182,12 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                                         af = ref_line[ref_h_idx['af_alt']],
                                         filt = ref_line[ref_h_idx['filter']],
                                         an = ref_line[ref_h_idx['an']]))
-                ref_line = fp_ref.readline().strip().split('\t')
-                try:
+                ref_line = fp_ref.readline()
+                if ref_line != '':
+                    r = ref_line.strip().split('\t')
                     ref_chr = int(ref_line[ref_h_idx['#chr']])
                     ref_pos = int(ref_line[ref_h_idx['pos']])
-                except ValueError:
+                else:
                     ref_has_lines = False
 
             equal = []
