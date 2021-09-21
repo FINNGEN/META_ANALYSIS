@@ -221,10 +221,7 @@ class VariantData:
 
             if is_symmetric(other.ref, other.alt):
                 ## never strandflip symmetrics. Assumed to be aligned.
-                if self.ref == other.ref and self.alt == other.alt:
-                    return True
-                elif self.ref == other.alt and self.alt == other.ref:
-                    return True
+                return False
 
             elif (self.ref == other.alt and self.alt == other.ref) :
                 if equalize:
