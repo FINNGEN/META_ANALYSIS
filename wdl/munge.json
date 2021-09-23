@@ -17,7 +17,7 @@
     "munge.lift_postprocess.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
     "munge.harmonize.docker": "gcr.io/finngen-refinery-dev/meta:b33b946",
     "munge.harmonize.gnomad_ref": "gs://gnomad3/genomes_3.0/ref/filter/gnomad_v3_b38_ref_nfe.gz",
-    "munge.harmonize.options": "",
+    "munge.harmonize.options": "--pre_aligned",
     "munge.plot.docker": "gcr.io/finngen-refinery-dev/meta:b33b946",
     "munge.plot.loglog_ylim": 20
 }
