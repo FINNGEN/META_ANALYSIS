@@ -163,38 +163,38 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 ref_line = fp_ref.readline()
                 if ref_line != '':
                     r = ref_line.strip().split('\t')
-                    ref_chr = int(ref_line[ref_h_idx['#chr']])
-                    ref_pos = int(ref_line[ref_h_idx['pos']])
+                    ref_chr = int(r[ref_h_idx['#chr']])
+                    ref_pos = int(r[ref_h_idx['pos']])
                 else:
                     ref_has_lines = False
 
             while ref_has_lines and ref_chr == var.chr and ref_pos == var.pos:
                 ref_vars.append(Variant(chr = ref_chr,
                                         pos = ref_pos,
-                                        ref = ref_line[ref_h_idx['ref']],
-                                        alt = ref_line[ref_h_idx['alt']],
-                                        af = ref_line[ref_h_idx['af_alt']],
-                                        filt = ref_line[ref_h_idx['filter']],
-                                        an = ref_line[ref_h_idx['an']]))
+                                        ref = r[ref_h_idx['ref']],
+                                        alt = r[ref_h_idx['alt']],
+                                        af = r[ref_h_idx['af_alt']],
+                                        filt = r[ref_h_idx['filter']],
+                                        an = r[ref_h_idx['an']]))
                 ref_line = fp_ref.readline()
                 if ref_line != '':
                     r = ref_line.strip().split('\t')
-                    ref_chr = int(ref_line[ref_h_idx['#chr']])
-                    ref_pos = int(ref_line[ref_h_idx['pos']])
+                    ref_chr = int(r[ref_h_idx['#chr']])
+                    ref_pos = int(r[ref_h_idx['pos']])
                 else:
                     ref_has_lines = False
 
             equal = []
             diffs = []
             fcs = []
-            for r in ref_vars:
-                if (var == r or (not pre_aligned and var.equalize_to(r))) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
+            for ref_var in ref_vars:
+                if (var == ref_var or (not pre_aligned and var.equalize_to(ref_var))) and (not passing_only or ref_var.filt == 'PASS') and ref_var.an >= gnomad_min_an:
                     diff = 1
                     fc = 1e9
-                    if r.af is not None and var.af is not None:
-                        diff = abs(var.af - float(r.af))
-                        fc = var.af/float(r.af) if float(r.af) != 0 else 1e9
-                    equal.append(r)
+                    if ref_var.af is not None and var.af is not None:
+                        diff = abs(var.af - float(ref_var.af))
+                        fc = var.af/float(ref_var.af) if float(ref_var.af) != 0 else 1e9
+                    equal.append(ref_var)
                     diffs.append(diff)
                     fcs.append(fc)
 
