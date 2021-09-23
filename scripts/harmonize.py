@@ -134,10 +134,7 @@ class VariantData(Variant):
         cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_fc, 3), self.gnomad_filt])
         return '\t'.join(cols)
 
-def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an):
-
-    if gnomad_min_an is None:
-        gnomad_min_an = -1
+def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned):
 
     required_cols = [chr_col, pos_col, ref_col, alt_col, af_col, beta_col]
     
@@ -163,12 +160,14 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                               extra_cols = [s[h_idx[extra_col]] for extra_col in extra_cols])
             ref_vars = []
             while ref_has_lines and ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos):
-                ref_line = fp_ref.readline().strip().split('\t')
-                try:
+                ref_line = fp_ref.readline()
+                if ref_line != '':
+                    r = ref_line.strip().split('\t')
                     ref_chr = int(ref_line[ref_h_idx['#chr']])
                     ref_pos = int(ref_line[ref_h_idx['pos']])
-                except ValueError:
+                else:
                     ref_has_lines = False
+
             while ref_has_lines and ref_chr == var.chr and ref_pos == var.pos:
                 ref_vars.append(Variant(chr = ref_chr,
                                         pos = ref_pos,
@@ -177,19 +176,20 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                                         af = ref_line[ref_h_idx['af_alt']],
                                         filt = ref_line[ref_h_idx['filter']],
                                         an = ref_line[ref_h_idx['an']]))
-                ref_line = fp_ref.readline().strip().split('\t')
-                try:
+                ref_line = fp_ref.readline()
+                if ref_line != '':
+                    r = ref_line.strip().split('\t')
                     ref_chr = int(ref_line[ref_h_idx['#chr']])
                     ref_pos = int(ref_line[ref_h_idx['pos']])
-                except ValueError:
+                else:
                     ref_has_lines = False
 
             equal = []
             diffs = []
             fcs = []
             for r in ref_vars:
-                if var.equalize_to(r) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
-                    diff = 1e9
+                if (var == r or (not pre_aligned and var.equalize_to(r))) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
+                    diff = 1
                     fc = 1e9
                     if r.af is not None and var.af is not None:
                         diff = abs(var.af - float(r.af))
@@ -198,8 +198,9 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                     diffs.append(diff)
                     fcs.append(fc)
 
+            best_diff = -1
             if len(equal) > 0:
-                best_diff = 1e9
+                best_diff = 2
                 for i,diff in enumerate(diffs):
                     if diff < best_diff or (diff == best_diff and equal[i].ref == var.ref and equal[i].alt == var.alt):
                         best_diff = diff
@@ -209,13 +210,13 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 var.af_fc = fcs[best_diff_idx] if fcs[best_diff_idx] != 1e9 else None
                 var.gnomad_filt = equal[best_diff_idx].filt
 
-            if not require_gnomad or len(equal) > 0:
+            if (not require_gnomad or len(equal) > 0) and best_diff <= gnomad_max_abs_diff:
                 print(var)
             
 def run():
     parser = argparse.ArgumentParser(description="Harmonize GWAS summary stats to reference")
     parser.add_argument('file_in', action='store', type=str, help='GWAS summary stats')
-    parser.add_argument('file_ref', action='store', type=str, help='gnomAD reference file')
+    parser.add_argument('file_ref', action='store', type=str, help='GnomAD reference file')
     parser.add_argument('--chr_col', action='store', type=str, default='#CHR', help='Chromosome column')
     parser.add_argument('--pos_col', action='store', type=str, default='POS', help='Position column')
     parser.add_argument('--ref_col', action='store', type=str, default='REF', help='Reference allele column')
@@ -224,7 +225,9 @@ def run():
     parser.add_argument('--beta_col', action='store', type=str, default='beta', help='Beta column')
     parser.add_argument('--require_gnomad', action='store_true', help='Filter out variants not in gnomAD')
     parser.add_argument('--passing_only', action='store_true', help='Filter out non-passing variants in gnomAD')
-    parser.add_argument('--gnomad_min_an', type=int, action='store', help='Minimum AN in gnomAD')
+    parser.add_argument('--gnomad_min_an', action='store', type=int, default=0, help='Minimum AN in gnomAD')
+    parser.add_argument('--gnomad_max_abs_diff', action='store', type=float, default=1.0, help='Maximum absolute difference between variant and gnomAD AF')
+    parser.add_argument('--pre_aligned', action='store_true', help='Input summary stats are already aligned to reference (disables flipping of alleles to try find best match)')
     args = parser.parse_args()
     harmonize(file_in = args.file_in,
               file_ref = args.file_ref,
@@ -236,7 +239,9 @@ def run():
               beta_col = args.beta_col,
               require_gnomad = args.require_gnomad,
               passing_only = args.passing_only,
-              gnomad_min_an = args.gnomad_min_an)
+              gnomad_min_an = args.gnomad_min_an,
+              gnomad_max_abs_diff = args.gnomad_max_abs_diff,
+              pre_aligned = args.pre_aligned)
     
 if __name__ == '__main__':
     run()

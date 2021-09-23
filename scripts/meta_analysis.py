@@ -194,6 +194,7 @@ class VariantData:
         self.beta = beta
         self.pval = pval
         self.z_scr = None
+        self.indel = None
         try:
             self.se = float(se) if se is not None  else None
         except ValueError:
@@ -211,77 +212,90 @@ class VariantData:
                   or (self.chr < other.chr)
                )
 
-    def is_equal(self, other:'VariantData') -> bool:
-        """
-            Checks if this VariantData is the same variant (possibly different strand or ordering of alleles)
-            returns: true if the same false if not
+    def _equalizer(self, other: 'VariantData', equalize: bool = False, flip_indels: bool = False) -> bool:
+        """Checks if two variants are equal
+
+        Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles).
+        
+        Args:
+            other:
+                Variant as VariantData object to compare this variant to.
+            equalize:
+                If True changes this variant's alleles and beta accordingly.
+            flip_indels:
+                If True will try matching indels with flipping.
+
+        Returns:
+            True if the same or False if not the same variant.
         """
 
         if (self.chr == other.chr and self.pos == other.pos):
-            flip_ref =  flip_strand(other.ref)
-            flip_alt =  flip_strand(other.alt)
 
-            if self.ref== other.ref and self.alt == other.alt :
+            if self.ref == other.ref and self.alt == other.alt :
                 return True
+            
+            if not flip_indels and self.is_indel:
+                return False
+            
+            flip_ref = flip_strand(other.ref)
+            flip_alt = flip_strand(other.alt)
 
-            if is_symmetric( other.ref, other.alt ):
+            if is_symmetric(other.ref, other.alt):
                 ## never strandflip symmetrics. Assumed to be aligned.
-                if self.ref == other.ref and self.alt == other.alt:
-                    return True
-                elif self.ref == other.alt and self.alt == other.ref:
-                    return True
+                return False
 
             elif (self.ref == other.alt and self.alt == other.ref) :
-                return True
-            elif (self.ref == flip_ref and self.alt==flip_alt):
-                return True
-            elif (self.ref == flip_alt and self.alt==flip_ref):
-                return True
-
-        return False
-
-    def equalize_to(self, other:'VariantData') -> bool:
-        """
-            Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles)
-            If it is, changes this variant's alleles and beta accordingly
-            returns: true if the same (flips effect direction and ref/alt alleles if necessary) or false if not the same variant
-        """
-
-        if (self.chr == other.chr and self.pos == other.pos):
-            flip_ref =  flip_strand(other.ref)
-            flip_alt =  flip_strand(other.alt)
-
-            if self.ref== other.ref and self.alt == other.alt :
-                    return True
-
-            if is_symmetric( other.ref, other.alt ):
-                ## never strandflip symmetrics. Assumed to be aligned.
-                if self.ref == other.ref and self.alt == other.alt:
-                    return True
-                elif self.ref == other.alt and self.alt == other.ref:
+                if equalize:
                     self.beta = -1 * self.beta if self.beta is not None else None
                     t = self.alt
                     self.alt = self.ref
                     self.ref = t
-                    return True
-
-            elif (self.ref == other.alt and self.alt == other.ref) :
-                self.beta = -1 * self.beta if self.beta is not None else None
-                t = self.alt
-                self.alt = self.ref
-                self.ref = t
                 return True
-            elif (self.ref == flip_ref and self.alt==flip_alt):
-                self.ref = flip_strand(self.ref)
-                self.alt = flip_strand(self.alt)
+            elif (self.ref == flip_ref and self.alt == flip_alt):
+                if equalize:
+                    self.ref = flip_strand(self.ref)
+                    self.alt = flip_strand(self.alt)
                 return True
-            elif (self.ref == flip_alt and self.alt==flip_ref):
-                self.beta = -1 * self.beta if self.beta is not None else None
-                self.ref =flip_strand(self.alt)
-                self.alt = flip_strand(self.ref)
+            elif (self.ref == flip_alt and self.alt == flip_ref):
+                if equalize:
+                    self.beta = -1 * self.beta if self.beta is not None else None
+                    self.ref = flip_strand(self.alt)
+                    self.alt = flip_strand(self.ref)
                 return True
 
         return False
+
+    def is_equal(self, other: 'VariantData', flip_indels: bool = False) -> bool:
+        """Checks if two variants are equal
+
+        Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles).
+        
+        Args:
+            other:
+                Variant as VariantData object to compare this variant to.
+            flip_indels:
+                If True will try matching indels with flipping.
+
+        Returns:
+            True if the same or False if not the same variant.
+        """
+        return self._equalizer(other=other, equalize=False, flip_indels=flip_indels)
+
+    def equalize_to(self, other: 'VariantData', flip_indels: bool = False) -> bool:
+        """Checks if two variants are equal and changes this variant's alleles and beta accordingly
+
+        Checks if this VariantData is the same variant as given other variant (possibly different strand or ordering of alleles) and changes this variant's alleles and beta accordingly.
+        
+        Args:
+            other:
+                Variant as VariantData object to compare this variant to.
+            flip_indels:
+                If True will try matching indels with flipping.
+
+        Returns:
+            True if the same or False if not the same variant.
+        """
+        return self._equalizer(other=other, equalize=True, flip_indels=flip_indels)
 
     @property
     def z_score(self):
@@ -291,6 +305,12 @@ class VariantData:
         if self.z_scr is None:
             self.z_scr = math.sqrt(chi2.isf(self.pval, df=1))
         return self.z_scr
+
+    @property
+    def is_indel(self):
+        if self.indel is None:
+            self.indel = len(self.ref)>1 or len(self.alt)>1
+        return self.indel
 
     def __str__(self):
         return "chr:{} pos:{} ref:{} alt:{} beta:{} pval:{} se:{} ".format(self.chr, self.pos, self.ref, self.alt, self.beta, self.pval, self.se)
@@ -307,7 +327,7 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf, chrom=None, dont_allow_space=False):
+    def __init__(self, conf, chrom=None, dont_allow_space=False, flip_indels=False):
         '''
         chrom: a chromosome to limit to or None if all chromosomes
         dont_allow_space: boolean, don't treat space as field delimiter (only tab)
@@ -315,6 +335,7 @@ class Study:
         self.conf = conf
         self.chrom = chrord[chrom] if chrom is not None else None
         self.dont_allow_space = dont_allow_space
+        self.flip_indels = flip_indels
         self.future = deque()
         self.eff_size = None
         self.z_scr = None
@@ -504,7 +525,7 @@ class Study:
             return None
 
         for i,v in enumerate(otherdats):
-            if v.equalize_to(dat):
+            if v.equalize_to(dat, flip_indels=self.flip_indels):
                 del otherdats[i]
                 self.put_back(otherdats)
                 return v
@@ -527,14 +548,14 @@ class Study:
         self.future.extendleft(variantlist)
 
 
-def get_studies(conf:str, chrom, dont_allow_space) -> List[Study]:
+def get_studies(conf:str, chrom, dont_allow_space, flip_indels) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
     """
 
     studies_conf = json.load(open(conf,'r'))
 
-    return [ Study(s, chrom, dont_allow_space) for s in studies_conf["meta"]]
+    return [ Study(s, chrom, dont_allow_space, flip_indels) for s in studies_conf["meta"]]
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[Tuple] :
     '''
@@ -601,12 +622,12 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
                 del dats[i][j]
                 s.put_back(dats[i])
                 break
-            if not v.is_equal(first):
+            if not v.is_equal(first, flip_indels=s.flip_indels):
                 s.put_back([v])
                 del dats[i][j]
         if not added:
             for j,v in reversed(list(enumerate(dats[i]))):
-                if v.equalize_to(first):
+                if v.equalize_to(first, flip_indels=s.flip_indels):
                     res.append(v)
                     added=True
                     del dats[i][j]
@@ -637,11 +658,10 @@ def run():
         Second parameter should be a path to (empty/not existing) directory where the data should be stored
     '''
 
-    parser = argparse.ArgumentParser(description="Run x-way meta-analysis")
+    parser = argparse.ArgumentParser(description='Run x-way meta-analysis')
     parser.add_argument('config_file', action='store', type=str, help='Configuration file ')
     parser.add_argument('path_to_res', action='store', type=str, help='Result file')
-    parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas.'
-            + 'Allowed values [n,inv_var,variance]', default="inv_var")
+    parser.add_argument('methods', action='store', type=str, help='List of meta-analysis methods to compute separated by commas. Allowed values [n,inv_var,variance]', default='inv_var')
 
     parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
@@ -649,10 +669,11 @@ def run():
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
     parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
     parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
+    parser.add_argument('--flip_indels', action='store_true', help='Try variant aligning by flipping indels also. By default indels are not flipped')
 
     args = parser.parse_args()
 
-    studs = get_studies(args.config_file, args.chrom, args.dont_allow_space)
+    studs = get_studies(args.config_file, args.chrom, args.dont_allow_space, args.flip_indels)
 
     methods = []
 

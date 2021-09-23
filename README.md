@@ -5,9 +5,13 @@ Tools for doing x way meta-analysis
 ## Variant matching across studies
 
 Variants are matched using chr pos ref and alt. For this reason all 37 build results need to first be lifted over to 38.
-<https://github.com/FINNGEN/commons/tree/master/liftover> can be used to liftover results first if needed.
+[lift.wdl](wdl/lift.wdl) can be used to liftover results first if needed.
 
 IMPORTANT: Studies need to be ordered by chr (1-22, x,y,mt) and position. Chromosome can be indicated with numbers 1-25 or 1-22, X, Y, MT, with or without 'chr' prefix and they will be internally coded to numerical values.
+
+## Munging
+
+Workflow for data munging (liftover, harmonization with GnomAD, general QC) can be run for sumstats prior to meta-analysis: [munge.wdl](wdl/munge.wdl)
 
 ## Running single trait meta-analysis
 
@@ -24,8 +28,7 @@ Run x-way meta-analysis
 positional arguments:
   config_file           Configuration file
   path_to_res           Result file
-  methods               List of meta-analysis methods to compute separated by
-                        commas.Allowed values [n,inv_var,variance]
+  methods               List of meta-analysis methods to compute separated by commas. Allowed values [n,inv_var,variance]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -37,6 +40,7 @@ optional arguments:
                         Do pairwise meta-analysis with the first given study
   --dont_allow_space    Do not allow space as field delimiter
   --chrom CHROM         Restrict to given chromosome
+  --flip_indels         Try variant aligning by flipping indels also. By default indels are not flipped
 ```
 
 The configuration file should be a json file with these elements:
@@ -62,4 +66,4 @@ The configuration file should be a json file with these elements:
 * `variance`: weight z-score from p-value by variance,
 * `inv_var`: regular inverse variance weighted betas meta-analysis.
 
-`inv_var` is recommeneded if betas and variances are comparable. In case of combining data frmo different models (e.g.) linear vs. logistic you should use sample size weighted meta.
+`inv_var` is recommeneded if betas and variances are comparable. In case of combining data from different models (e.g.) linear vs. logistic you should use sample size weighted meta.
