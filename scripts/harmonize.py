@@ -134,7 +134,7 @@ class VariantData(Variant):
         cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_fc, 3), self.gnomad_filt])
         return '\t'.join(cols)
 
-def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff):
+def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned):
 
     required_cols = [chr_col, pos_col, ref_col, alt_col, af_col, beta_col]
     
@@ -188,7 +188,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
             diffs = []
             fcs = []
             for r in ref_vars:
-                if var == r and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
+                if (var == r or (not pre_aligned and var.equalize_to(r))) and (not passing_only or r.filt == 'PASS') and r.an >= gnomad_min_an:
                     diff = 1
                     fc = 1e9
                     if r.af is not None and var.af is not None:
@@ -216,7 +216,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
 def run():
     parser = argparse.ArgumentParser(description="Harmonize GWAS summary stats to reference")
     parser.add_argument('file_in', action='store', type=str, help='GWAS summary stats')
-    parser.add_argument('file_ref', action='store', type=str, help='gnomAD reference file')
+    parser.add_argument('file_ref', action='store', type=str, help='GnomAD reference file')
     parser.add_argument('--chr_col', action='store', type=str, default='#CHR', help='Chromosome column')
     parser.add_argument('--pos_col', action='store', type=str, default='POS', help='Position column')
     parser.add_argument('--ref_col', action='store', type=str, default='REF', help='Reference allele column')
@@ -227,6 +227,7 @@ def run():
     parser.add_argument('--passing_only', action='store_true', help='Filter out non-passing variants in gnomAD')
     parser.add_argument('--gnomad_min_an', action='store', type=int, default=0, help='Minimum AN in gnomAD')
     parser.add_argument('--gnomad_max_abs_diff', action='store', type=float, default=1.0, help='Maximum absolute difference between variant and gnomAD AF')
+    parser.add_argument('--pre_aligned', action='store_true', help='Input summary stats are already aligned to reference (disables flipping of alleles to try find best match)')
     args = parser.parse_args()
     harmonize(file_in = args.file_in,
               file_ref = args.file_ref,
@@ -239,7 +240,8 @@ def run():
               require_gnomad = args.require_gnomad,
               passing_only = args.passing_only,
               gnomad_min_an = args.gnomad_min_an,
-              gnomad_max_abs_diff = args.gnomad_max_abs_diff)
+              gnomad_max_abs_diff = args.gnomad_max_abs_diff,
+              pre_aligned = args.pre_aligned)
     
 if __name__ == '__main__':
     run()
