@@ -1,15 +1,19 @@
+version 1.0
+
 workflow liftover {
 
-    File sumstats_loc
-    Array[String] sumstat_files = read_lines(sumstats_loc)
+    input {
+        File sumstats_loc
+        Array[String] sumstat_files = read_lines(sumstats_loc)
 
-    String delim
-    String chr_col
-    String pos_col
-    String ref_col
-    String alt_col
-    String af_col
-    String beta_col
+        String delim
+        String chr_col
+        String pos_col
+        String ref_col
+        String alt_col
+        String af_col
+        String beta_col
+    }
 
     scatter (sumstat_file in sumstat_files) {
         call sumstat_to_vcf {
@@ -47,16 +51,18 @@ workflow liftover {
 
 task sumstat_to_vcf {
 
-    File sumstat_file
-    String delim
-    String chr_col
-    String pos_col
-    String ref_col
-    String alt_col
+    input {
+        File sumstat_file
+        String delim
+        String chr_col
+        String pos_col
+        String ref_col
+        String alt_col
 
-    String docker
+        String docker
 
-    String base = basename(sumstat_file, ".gz")
+        String base = basename(sumstat_file, ".gz")
+    }
 
     command <<<
 
@@ -64,18 +70,18 @@ task sumstat_to_vcf {
 
         echo "`date` converting sumstat to vcf"
 
-        python3 <<EOF | bgzip > ${base}.vcf.gz
+        python3 <<EOF | bgzip > ~{base}.vcf.gz
 
         from datetime import date
         import gzip
         from collections import defaultdict
 
-        sumstat = "${sumstat_file}"
-        delim = "${delim}"
-        chr_col = "${chr_col}"
-        pos_col = "${pos_col}"
-        ref_col = "${ref_col}"
-        alt_col = "${alt_col}"
+        sumstat = "~{sumstat_file}"
+        delim = "~{delim}"
+        chr_col = "~{chr_col}"
+        pos_col = "~{pos_col}"
+        ref_col = "~{ref_col}"
+        alt_col = "~{alt_col}"
 
         print('##fileformat=VCFv4.0')
 
@@ -116,7 +122,7 @@ task sumstat_to_vcf {
 
         EOF
 
-        tabix -s 1 -b 2 -e 2 ${base}.vcf.gz
+        tabix -s 1 -b 2 -e 2 ~{base}.vcf.gz
 
     >>>
 
@@ -126,7 +132,7 @@ task sumstat_to_vcf {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(sumstat_file, "G")) + " HDD"
@@ -139,14 +145,16 @@ task sumstat_to_vcf {
 
 task lift {
 
-    File sumstat_vcf
+    input {
+        File sumstat_vcf
 
-    String docker
-    File chainfile
-    File b38_assembly_fasta
-    File b38_assembly_dict
+        String docker
+        File chainfile
+        File b38_assembly_fasta
+        File b38_assembly_dict
 
-    String base = basename(sumstat_vcf, ".vcf.gz")
+        String base = basename(sumstat_vcf, ".vcf.gz")
+    }
 
     command <<<
 
@@ -154,11 +162,11 @@ task lift {
 
         echo "`date` lifting to build 38"
         java -jar /usr/picard/picard.jar LiftoverVcf \
-            -I ${sumstat_vcf} \
-            -O ${base}.GRCh38.vcf \
-            --CHAIN ${chainfile} \
+            -I ~{sumstat_vcf} \
+            -O ~{base}.GRCh38.vcf \
+            --CHAIN ~{chainfile} \
             --REJECT rejected_variants.vcf \
-            -R ${b38_assembly_fasta} \
+            -R ~{b38_assembly_fasta} \
             --MAX_RECORDS_IN_RAM 500000 \
             --RECOVER_SWAPPED_REF_ALT true
 
@@ -170,7 +178,7 @@ task lift {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "32 GB"
         disks: "local-disk " + 10*ceil(size(sumstat_vcf, "G")) + " HDD"
@@ -183,45 +191,47 @@ task lift {
 
 task lift_postprocess {
 
-    File lifted_vcf
-    File sumstat_file
-    String delim
-    String chr_col
-    String pos_col
-    String ref_col
-    String alt_col
-    String af_col
-    String beta_col
+    input {
+        File lifted_vcf
+        File sumstat_file
+        String delim
+        String chr_col
+        String pos_col
+        String ref_col
+        String alt_col
+        String af_col
+        String beta_col
 
-    String docker
+        String docker
 
-    String base = basename(lifted_vcf, ".vcf")
+        String base = basename(lifted_vcf, ".vcf")
+    }
 
     command <<<
 
         set -euxo pipefail
 
         # Sort by old positions
-        grep -v "^#" ${lifted_vcf} | tr ":" "\t" | awk '
+        grep -v "^#" ~{lifted_vcf} | tr ":" "\t" | awk '
         BEGIN{OFS="\t"}
         { gsub("chr", ""); gsub("X", "23"); gsub("Y", "24"); print $1,$2,$7,$8,$3,$4,$5,$6,$11 }
-        ' | sort -k5,5g -k6,6g > ${base}.tsv
+        ' | sort -k5,5g -k6,6g > ~{base}.tsv
 
-        python3 <<EOF | sort -k1,1g -k2,2g | bgzip > ${base}.tsv.gz
+        python3 <<EOF | sort -k1,1g -k2,2g | bgzip > ~{base}.tsv.gz
 
         import gzip
         from collections import defaultdict
 
         valid_chrs = [str(i) for i in range(1,25)]
 
-        sumstat = "${sumstat_file}"
-        delim = "${delim}"
-        chr_col = "${chr_col}"
-        pos_col = "${pos_col}"
-        ref_col = "${ref_col}"
-        alt_col = "${alt_col}"
-        af_col = "${af_col}"
-        beta_col = "${beta_col}"
+        sumstat = "~{sumstat_file}"
+        delim = "~{delim}"
+        chr_col = "~{chr_col}"
+        pos_col = "~{pos_col}"
+        ref_col = "~{ref_col}"
+        alt_col = "~{alt_col}"
+        af_col = "~{af_col}"
+        beta_col = "~{beta_col}"
 
         s_f = gzip.open(sumstat, 'rt')
         sumstat_header = s_f.readline().strip().split(delim)
@@ -234,7 +244,7 @@ task lift_postprocess {
         sumstat_ref = 'N'
         sumstat_alt = 'N'
 
-        with open('${base}.tsv', 'rt') as f:
+        with open('~{base}.tsv', 'rt') as f:
             for line in f:
                 s = line.strip().split('\t')
                 new_chr = s[0]
@@ -279,7 +289,7 @@ task lift_postprocess {
 
         EOF
 
-        tabix -S 1 -s 1 -b 2 -e 2 ${base}.tsv.gz
+        tabix -S 1 -s 1 -b 2 -e 2 ~{base}.tsv.gz
 
     >>>
 
@@ -289,7 +299,7 @@ task lift_postprocess {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"

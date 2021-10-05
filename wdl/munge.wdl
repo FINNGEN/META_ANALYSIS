@@ -1,7 +1,11 @@
+version 1.0
+
 workflow munge {
 
-    File sumstats_loc
-    Array[String] sumstat_files = read_lines(sumstats_loc)
+    input {
+        File sumstats_loc
+        Array[String] sumstat_files = read_lines(sumstats_loc)
+    }
 
     scatter (sumstat_file in sumstat_files) {
         call clean_filter {
@@ -38,54 +42,55 @@ workflow munge {
 # Filter bad quality variants
 task clean_filter {
 
-    File sumstat_file
+    input {
+        File sumstat_file
 
-    String docker
-    String chr_col
-    String pos_col
-    String ref_col
-    String alt_col
-    String af_col
-    String beta_col
-    String se_col
-    String pval_col
+        String docker
+        String chr_col
+        String pos_col
+        String ref_col
+        String alt_col
+        String af_col
+        String beta_col
+        String se_col
+        String pval_col
 
-    String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
-    String dollar = "$"
+        String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
+    }
 
     command <<<
 
         set -eux
 
         echo "GWAS meta-analysis - clean and filter sumstats"
-        echo "${sumstat_file}"
+        echo "~{sumstat_file}"
         echo ""
 
         catcmd="cat"
-        if [[ ${sumstat_file} == *.gz ]] || [[ ${sumstat_file} == *.bgz ]]
+        if [[ ~{sumstat_file} == *.gz ]] || [[ ~{sumstat_file} == *.bgz ]]
         then
             catcmd="zcat"
         fi
 
         echo "`date` original number of variants"
-        $catcmd ${sumstat_file} | tail -n+2 | wc -l
+        $catcmd ~{sumstat_file} | tail -n+2 | wc -l
 
-        chr_col=$($catcmd ${sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "${chr_col}" | head -1 | cut -d ':' -f1)
-        pos_col=$($catcmd ${sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "${pos_col}" | head -1 | cut -d ':' -f1)
-        printf "`date` col CHR "${dollar}{chr_col}" col POS "${dollar}{pos_col}"\n"
+        chr_col=$($catcmd ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{chr_col}" | head -1 | cut -d ':' -f1)
+        pos_col=$($catcmd ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{pos_col}" | head -1 | cut -d ':' -f1)
+        printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
-        $catcmd ${sumstat_file} | awk ' \
+        $catcmd ~{sumstat_file} | awk ' \
             BEGIN{FS="\t| "; OFS="\t"}
             NR==1 {
                 for (i=1;i<=NF;i++) {
-                    sub("^${chr_col}$", "#CHR", $i);
-                    sub("^${pos_col}$", "POS", $i);
-                    sub("^${ref_col}$", "REF", $i);
-                    sub("^${alt_col}$", "ALT", $i);
-                    sub("^${af_col}$", "af_alt", $i);
-                    sub("^${beta_col}$", "beta", $i);
-                    sub("^${se_col}$", "sebeta", $i);
-                    sub("^${pval_col}$", "pval", $i);
+                    sub("^~{chr_col}$", "#CHR", $i);
+                    sub("^~{pos_col}$", "POS", $i);
+                    sub("^~{ref_col}$", "REF", $i);
+                    sub("^~{alt_col}$", "ALT", $i);
+                    sub("^~{af_col}$", "af_alt", $i);
+                    sub("^~{beta_col}$", "beta", $i);
+                    sub("^~{se_col}$", "sebeta", $i);
+                    sub("^~{pval_col}$", "pval", $i);
                     a[$i]=i;
                     if ($i=="POS") pos=i
                 }
@@ -104,21 +109,21 @@ task clean_filter {
                     printf "\n"
                 }
             }' | \
-        sort -k$chr_col,${dollar}{chr_col}g -k$pos_col,${dollar}{pos_col}g | \
-        bgzip > ${outfile}
-        tabix -s $chr_col -b $pos_col -e $pos_col ${outfile}
+        sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | \
+        bgzip > ~{outfile}
+        tabix -s $chr_col -b $pos_col -e $pos_col ~{outfile}
 
         echo "`date` new number of variants"
-        gunzip -c ${outfile} | tail -n+2 | wc -l
+        gunzip -c ~{outfile} | tail -n+2 | wc -l
         echo "`date` headers"
-        gunzip -c ${outfile} | head -1 | tr '\t' '\n'
+        gunzip -c ~{outfile} | head -1 | tr '\t' '\n'
 
-        tabix -l ${outfile} > chr.tmp
+        tabix -l ~{outfile} > chr.tmp
         echo "`date` $(wc -l chr.tmp | cut -d' ' -f1) chromosomes"
         cat chr.tmp
 
         echo "`date` unique number of fields"
-        gunzip -c ${outfile} | awk 'BEGIN{FS="\t"} {print NF}' | sort -u > n.tmp
+        gunzip -c ~{outfile} | awk 'BEGIN{FS="\t"} {print NF}' | sort -u > n.tmp
         cat n.tmp
         if [ $(wc -l n.tmp | cut -d' ' -f1) != 1 ]; then echo "file not square"; exit 1; fi
         if [ $(wc -l chr.tmp | cut -d' ' -f1) -lt 22 ]; then echo "less than 22 chromosomes"; exit 1; fi
@@ -133,7 +138,7 @@ task clean_filter {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
@@ -146,11 +151,13 @@ task clean_filter {
 # Convert sumstat to vcf for liftover
 task sumstat_to_vcf {
 
-    File sumstat_file
+    input {
+        File sumstat_file
 
-    String docker
+        String docker
 
-    String base = basename(sumstat_file, ".gz")
+        String base = basename(sumstat_file, ".gz")
+    }
 
     command <<<
 
@@ -158,13 +165,13 @@ task sumstat_to_vcf {
 
         echo "`date` converting sumstat to vcf"
 
-        python3 <<EOF | bgzip > ${base}.vcf.gz
+        python3 <<EOF | bgzip > ~{base}.vcf.gz
 
         from datetime import date
         import gzip
         from collections import defaultdict
 
-        sumstat = '${sumstat_file}'
+        sumstat = '~{sumstat_file}'
         delim = '\t'
         chr_col = '#CHR'
         pos_col = 'POS'
@@ -210,7 +217,7 @@ task sumstat_to_vcf {
 
         EOF
 
-        tabix -s 1 -b 2 -e 2 ${base}.vcf.gz
+        tabix -s 1 -b 2 -e 2 ~{base}.vcf.gz
 
     >>>
 
@@ -220,7 +227,7 @@ task sumstat_to_vcf {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(sumstat_file, "G")) + " HDD"
@@ -233,14 +240,16 @@ task sumstat_to_vcf {
 
 task lift {
 
-    File sumstat_vcf
+    input {
+        File sumstat_vcf
 
-    String docker
-    File chainfile
-    File b38_assembly_fasta
-    File b38_assembly_dict
+        String docker
+        File chainfile
+        File b38_assembly_fasta
+        File b38_assembly_dict
 
-    String base = basename(sumstat_vcf, ".vcf.gz")
+        String base = basename(sumstat_vcf, ".vcf.gz")
+    }
 
     command <<<
 
@@ -248,11 +257,11 @@ task lift {
 
         echo "`date` lifting to build 38"
         java -jar /usr/picard/picard.jar LiftoverVcf \
-            -I ${sumstat_vcf} \
-            -O ${base}.GRCh38.vcf \
-            --CHAIN ${chainfile} \
+            -I ~{sumstat_vcf} \
+            -O ~{base}.GRCh38.vcf \
+            --CHAIN ~{chainfile} \
             --REJECT rejected_variants.vcf \
-            -R ${b38_assembly_fasta} \
+            -R ~{b38_assembly_fasta} \
             --MAX_RECORDS_IN_RAM 500000 \
             --RECOVER_SWAPPED_REF_ALT true
 
@@ -264,7 +273,7 @@ task lift {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "32 GB"
         disks: "local-disk " + 10*ceil(size(sumstat_vcf, "G")) + " HDD"
@@ -277,35 +286,36 @@ task lift {
 
 task lift_postprocess {
 
-    File lifted_vcf
-    File sumstat_file
+    input {
+        File lifted_vcf
+        File sumstat_file
 
-    String docker
+        String docker
 
-    String base = basename(lifted_vcf, ".vcf")
-    String dollar = "$"
+        String base = basename(lifted_vcf, ".vcf")
+    }
 
     command <<<
 
         set -eux
 
         # Sort by old positions
-        grep -v "^#" ${lifted_vcf} | tr ":" "\t" | awk '
+        grep -v "^#" ~{lifted_vcf} | tr ":" "\t" | awk '
         BEGIN{OFS="\t"}
         { gsub("chr", ""); gsub("X", "23"); gsub("Y", "24"); print $1,$2,$7,$8,$3,$4,$5,$6,$11 }
-        ' | sort -k5,5g -k6,6g > ${base}.tsv
+        ' | sort -k5,5g -k6,6g > ~{base}.tsv
 
-        chr_col=$(zcat ${sumstat_file} | head -1 | tr '\t ' '\n' | grep -nwF "#CHR" | head -1 | cut -d ':' -f1)
-        pos_col=$(zcat ${sumstat_file} | head -1 | tr '\t ' '\n' | grep -nwF "POS" | head -1 | cut -d ':' -f1)
+        chr_col=$(zcat ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nwF "#CHR" | head -1 | cut -d ':' -f1)
+        pos_col=$(zcat ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nwF "POS" | head -1 | cut -d ':' -f1)
 
-        python3 <<EOF | sort -k$chr_col,${dollar}{chr_col}g -k$pos_col,${dollar}{pos_col}g | bgzip > ${base}.tsv.gz
+        python3 <<EOF | sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | bgzip > ~{base}.tsv.gz
 
         import gzip
         from collections import defaultdict
 
         valid_chrs = set([str(i) for i in range(1,25)])
 
-        sumstat = '${sumstat_file}'
+        sumstat = '~{sumstat_file}'
         delim = '\t'
         chr_col = '#CHR'
         pos_col = 'POS'
@@ -325,7 +335,7 @@ task lift_postprocess {
         sumstat_ref = 'N'
         sumstat_alt = 'N'
 
-        with open('${base}.tsv', 'rt') as f:
+        with open('~{base}.tsv', 'rt') as f:
             for line in f:
                 s = line.strip().split('\t')
                 new_chr = s[0]
@@ -370,7 +380,7 @@ task lift_postprocess {
 
         EOF
 
-        tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ${base}.tsv.gz
+        tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ~{base}.tsv.gz
 
     >>>
 
@@ -380,7 +390,7 @@ task lift_postprocess {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"
@@ -393,32 +403,34 @@ task lift_postprocess {
 # Harmonize variants with gnomad reference
 task harmonize {
 
-    File sumstat_file
+    input {
+        File sumstat_file
 
-    String docker
-    File gnomad_ref
-    String options
+        String docker
+        File gnomad_ref
+        String options
 
-    String base = basename(sumstat_file, ".tsv.gz")
-    String gnomad_ref_base = basename(gnomad_ref)
+        String base = basename(sumstat_file, ".tsv.gz")
+        String gnomad_ref_base = basename(gnomad_ref)
+    }
 
     command <<<
 
         set -eux
 
         echo "GWAS meta-analysis - harmonize sumstats to reference"
-        echo "${sumstat_file}"
-        echo "${gnomad_ref}"
+        echo "~{sumstat_file}"
+        echo "~{gnomad_ref}"
         echo ""
 
-        mv ${sumstat_file} ${base}
-        mv ${gnomad_ref} ${gnomad_ref_base}
+        mv ~{sumstat_file} ~{base}
+        mv ~{gnomad_ref} ~{gnomad_ref_base}
 
         echo "`date` harmonizing stats with gnomAD"
-        python3 /META_ANALYSIS/scripts/harmonize.py ${base} ${gnomad_ref_base} ${options} \
-        | bgzip > ${base}.${gnomad_ref_base}
+        python3 /META_ANALYSIS/scripts/harmonize.py ~{base} ~{gnomad_ref_base} ~{options} \
+        | bgzip > ~{base}.~{gnomad_ref_base}
         
-        tabix -s 1 -b 2 -e 2 ${base}.${gnomad_ref_base}
+        tabix -s 1 -b 2 -e 2 ~{base}.~{gnomad_ref_base}
         echo "`date` done"
 
     >>>
@@ -429,7 +441,7 @@ task harmonize {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G") + size(gnomad_ref, "G")) + " HDD"
@@ -442,25 +454,27 @@ task harmonize {
 # Make qc plots
 task plot {
 
-    File sumstat_file
+    input {
+        File sumstat_file
 
-    String docker
-    Int loglog_ylim
+        String docker
+        Int loglog_ylim
 
-    String base = basename(sumstat_file)
+        String base = basename(sumstat_file)
+    }
 
     command <<<
 
         set -euxo pipefail
 
-        mv ${sumstat_file} ${base}
+        mv ~{sumstat_file} ~{base}
 
         Rscript - <<EOF
         require(ggplot2)
         require(data.table)
         options(bitmapType='cairo')
-        data <- fread("${base}", select=c("#CHR", "POS", "pval", "af_gnomad", "af_alt"), header=T)
-        png("${base}_AF.png", width=1000, height=1000, units="px")
+        data <- fread("~{base}", select=c("#CHR", "POS", "pval", "af_gnomad", "af_alt"), header=T)
+        png("~{base}_AF.png", width=1000, height=1000, units="px")
         p <- ggplot(data, aes_string(x="af_alt", y="af_gnomad")) +
           geom_point(alpha=0.1) +
           theme_minimal(base_size=18)
@@ -468,7 +482,7 @@ task plot {
         dev.off()
         EOF
 
-        /META_ANALYSIS/scripts/qqplot.R --file ${base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ${loglog_ylim}
+        /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ~{loglog_ylim}
 
     >>>
 
@@ -477,7 +491,7 @@ task plot {
     }
 
     runtime {
-        docker: "${docker}"
+        docker: "~{docker}"
         cpu: "1"
         memory: "20 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"

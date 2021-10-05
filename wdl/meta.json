@@ -1,14 +1,14 @@
 {
     "meta_analysis.sumstats_loc": "gs://juham-fg/meta-analysis/E4_HYTHY_AI_STRICT_sumstat_files.txt",
     "meta_analysis.pheno_confs": "gs://juham-fg/meta-analysis/E4_HYTHY_AI_STRICT_conf_json.txt",
-    "meta_analysis.run_meta.run_range.docker": "gcr.io/finngen-refinery-dev/meta:4bd7c98",
-    "meta_analysis.run_meta.run_range.method": "inv_var",
-    "meta_analysis.run_meta.run_range.opts": "--is_het_test --dont_allow_space --leave_one_out",
-    "meta_analysis.run_meta.combine_chrom_metas.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5",
-    "meta_analysis.run_meta.add_rsids.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5",
-    "meta_analysis.run_meta.add_rsids.ref_file": "gs://autoreporting_resources/dbsnp_vcf/dbsnp_hg38p13_b153_numerical.vcf.gz",
-    "meta_analysis.run_meta.meta_qq.docker": "gcr.io/finngen-refinery-dev/meta:4bd7c98",
-    "meta_analysis.run_meta.meta_qq.pvals_to_plot": "all_inv_var_meta_p,all_inv_var_het_p,leave_FINNGEN_inv_var_meta_p,leave_UKBB_inv_var_meta_p,leave_ESTBB_inv_var_meta_p",
-    "meta_analysis.run_meta.meta_qq.loglog_ylim": 20,
-    "meta_analysis.run_meta.post_filter.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5"
+    "meta_analysis.run_range.docker": "gcr.io/finngen-refinery-dev/meta:4bd7c98",
+    "meta_analysis.run_range.method": "inv_var",
+    "meta_analysis.run_range.opts": "--is_het_test --dont_allow_space --leave_one_out",
+    "meta_analysis.combine_chrom_metas.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5",
+    "meta_analysis.add_rsids.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5",
+    "meta_analysis.add_rsids.ref_file": "gs://autoreporting_resources/dbsnp_vcf/dbsnp_hg38p13_b153_numerical.vcf.gz",
+    "meta_analysis.meta_qq.docker": "gcr.io/finngen-refinery-dev/meta:4bd7c98",
+    "meta_analysis.meta_qq.pvals_to_plot": "all_inv_var_meta_p,all_inv_var_het_p,leave_FINNGEN_inv_var_meta_p,leave_UKBB_inv_var_meta_p,leave_ESTBB_inv_var_meta_p",
+    "meta_analysis.meta_qq.loglog_ylim": 20,
+    "meta_analysis.post_filter.docker": "gcr.io/finngen-refinery-dev/bioinformatics:0.5"
 }
