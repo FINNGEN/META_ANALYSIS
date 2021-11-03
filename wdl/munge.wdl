@@ -111,7 +111,7 @@ task clean_filter {
             }' | \
         sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | \
         bgzip > ~{outfile}
-        tabix -s $chr_col -b $pos_col -e $pos_col ~{outfile}
+        tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ~{outfile}
 
         echo "`date` new number of variants"
         gunzip -c ~{outfile} | tail -n+2 | wc -l
