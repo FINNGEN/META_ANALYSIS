@@ -152,12 +152,15 @@ def print_best_match(variant_list: List[VariantData], require_gnomad: bool, gnom
             keep_best_duplicate: if multiple variants, print only best match
     """
 
-    best_idx = 0
     if len(variant_list) > 1 and keep_best_duplicate:
-        diffs = [x.af_abs_diff for x in variant_list]
+        diffs = [var.af_abs_diff for var in variant_list]
         best_idx = diffs.index(min(diffs))
-    if (not require_gnomad or variant_list[best_idx].gnomad_af is not None) and variant_list[best_idx].af_abs_diff <= gnomad_max_abs_diff:
-        print(variant_list[best_idx])
+        if (not require_gnomad or variant_list[best_idx].gnomad_af is not None) and variant_list[best_idx].af_abs_diff <= gnomad_max_abs_diff:
+            print(variant_list[best_idx])
+    else:
+        for var in variant_list:
+            if (not require_gnomad or var.gnomad_af is not None) and var.af_abs_diff <= gnomad_max_abs_diff:
+                print(var)
 
 
 def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned, keep_best_duplicate):
