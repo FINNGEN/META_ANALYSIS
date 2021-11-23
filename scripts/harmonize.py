@@ -66,6 +66,7 @@ class VariantData(Variant):
         self.gnomad_af = gnomad_af
         self.fc = None
         self.gnomad_filt = gnomad_filt
+        self.af_diff = None
 
     def equalize_to(self, other:'Variant') -> bool:
         """Checks if two variants are equal and changes this variant's alleles and beta accordingly.
@@ -118,6 +119,14 @@ class VariantData(Variant):
             self.fc = self.af/self.gnomad_af if self.gnomad_af != 0 else 1e9
         return self.fc
 
+    @property
+    def af_abs_diff(self):
+        if self.af_diff is None and self.gnomad_af is not None and self.af is not None:
+            self.af_diff = abs(self.af-self.gnomad_af)
+        elif self.af_diff is None and (self.gnomad_af is None or self.af is None):
+            self.af_diff = -1
+        return self.af_diff
+
     def __str__(self):
         cols = [str(self.chr), str(self.pos), self.ref, self.alt, str(self.af), str(self.beta)]
         cols.extend(self.extra_cols)
@@ -133,7 +142,25 @@ class VariantGnomad(Variant):
         self.an = int(an)
 
 
-def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned):
+def print_best_match(variant_list: List[VariantData], require_gnomad: bool, gnomad_max_abs_diff: float, keep_best_duplicate: bool):
+    """Finds best match according to AF difference from list of variants and prints it
+
+        Args:
+            variant_list: list of VariantData objects
+            require_gnomad: if variant not found in gnomAD, don't print variant
+            gnomad_max_abs_diff: maximum absolute difference between variant and gnomAD AF
+            keep_best_duplicate: if multiple variants, print only best match
+    """
+
+    best_idx = 0
+    if len(variant_list) > 1 and keep_best_duplicate:
+        diffs = [x.af_abs_diff for x in variant_list]
+        best_idx = diffs.index(min(diffs))
+    if (not require_gnomad or variant_list[best_idx].gnomad_af is not None) and variant_list[best_idx].af_abs_diff <= gnomad_max_abs_diff:
+        print(variant_list[best_idx])
+
+
+def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned, keep_best_duplicate):
 
     required_cols = [chr_col, pos_col, ref_col, alt_col, af_col, beta_col]
     
@@ -142,6 +169,9 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
     ref_chr = 1
     ref_pos = 0
     ref_h_idx = {h:i for i,h in enumerate(fp_ref.readline().strip().split('\t'))}
+
+    previous_variants = []
+    ref_vars = []
 
     with gzip.open(file_in, 'rt') as f:
         header = f.readline().strip().split('\t')
@@ -157,31 +187,33 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                               af = s[h_idx[af_col]],
                               beta = s[h_idx[beta_col]],
                               extra_cols = [s[h_idx[extra_col]] for extra_col in extra_cols])
-            ref_vars = []
-            while ref_has_lines and ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos):
-                ref_line = fp_ref.readline()
-                if ref_line != '':
-                    r = ref_line.strip().split('\t')
-                    ref_chr = int(r[ref_h_idx['#chr']])
-                    ref_pos = int(r[ref_h_idx['pos']])
-                else:
-                    ref_has_lines = False
+            
+            if not ref_vars or ref_vars[0] < var:
+                ref_vars = []
+                while ref_has_lines and ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos):
+                    ref_line = fp_ref.readline()
+                    if ref_line != '':
+                        r = ref_line.strip().split('\t')
+                        ref_chr = int(r[ref_h_idx['#chr']])
+                        ref_pos = int(r[ref_h_idx['pos']])
+                    else:
+                        ref_has_lines = False
 
-            while ref_has_lines and ref_chr == var.chr and ref_pos == var.pos:
-                ref_vars.append(VariantGnomad(chr = ref_chr,
-                                              pos = ref_pos,
-                                              ref = r[ref_h_idx['ref']],
-                                              alt = r[ref_h_idx['alt']],
-                                              af = r[ref_h_idx['af_alt']],
-                                              filt = r[ref_h_idx['filter']],
-                                              an = r[ref_h_idx['an']]))
-                ref_line = fp_ref.readline()
-                if ref_line != '':
-                    r = ref_line.strip().split('\t')
-                    ref_chr = int(r[ref_h_idx['#chr']])
-                    ref_pos = int(r[ref_h_idx['pos']])
-                else:
-                    ref_has_lines = False
+                while ref_has_lines and ref_chr == var.chr and ref_pos == var.pos:
+                    ref_vars.append(VariantGnomad(chr = ref_chr,
+                                                pos = ref_pos,
+                                                ref = r[ref_h_idx['ref']],
+                                                alt = r[ref_h_idx['alt']],
+                                                af = r[ref_h_idx['af_alt']],
+                                                filt = r[ref_h_idx['filter']],
+                                                an = r[ref_h_idx['an']]))
+                    ref_line = fp_ref.readline()
+                    if ref_line != '':
+                        r = ref_line.strip().split('\t')
+                        ref_chr = int(r[ref_h_idx['#chr']])
+                        ref_pos = int(r[ref_h_idx['pos']])
+                    else:
+                        ref_has_lines = False
 
             equal = []
             diffs = []
@@ -205,9 +237,15 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 var.gnomad_af = equal[best_diff_idx].af
                 var.gnomad_filt = equal[best_diff_idx].filt
 
-            if (not require_gnomad or len(equal) > 0) and best_diff <= gnomad_max_abs_diff:
-                print(var)
-            
+            if previous_variants and previous_variants[0] != var:
+                print_best_match(variant_list=previous_variants, require_gnomad=require_gnomad, gnomad_max_abs_diff=gnomad_max_abs_diff, keep_best_duplicate=keep_best_duplicate)
+                previous_variants = []
+            previous_variants.append(var)
+
+        if previous_variants:
+            print_best_match(variant_list=previous_variants, require_gnomad=require_gnomad, gnomad_max_abs_diff=gnomad_max_abs_diff, keep_best_duplicate=keep_best_duplicate)
+
+
 def run():
     parser = argparse.ArgumentParser(description="Harmonize GWAS summary stats to reference")
     parser.add_argument('file_in', action='store', type=str, help='GWAS summary stats')
@@ -223,6 +261,7 @@ def run():
     parser.add_argument('--gnomad_min_an', action='store', type=int, default=0, help='Minimum AN in gnomAD')
     parser.add_argument('--gnomad_max_abs_diff', action='store', type=float, default=1.0, help='Maximum absolute difference between variant and gnomAD AF')
     parser.add_argument('--pre_aligned', action='store_true', help='Input summary stats are already aligned to reference (disables flipping of alleles to try find best match)')
+    parser.add_argument('--keep_best_duplicate', action='store_true', help='If duplicate variants (by chr:pos:ref:alt) keep variant with smallest AF difference to reference. Otherwise discard both')
     args = parser.parse_args()
     harmonize(file_in = args.file_in,
               file_ref = args.file_ref,
@@ -236,7 +275,8 @@ def run():
               passing_only = args.passing_only,
               gnomad_min_an = args.gnomad_min_an,
               gnomad_max_abs_diff = args.gnomad_max_abs_diff,
-              pre_aligned = args.pre_aligned)
+              pre_aligned = args.pre_aligned,
+              keep_best_duplicate = args.keep_best_duplicate)
     
 if __name__ == '__main__':
     run()
