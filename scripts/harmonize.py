@@ -142,25 +142,30 @@ class VariantGnomad(Variant):
         self.an = int(an)
 
 
-def print_best_match(variant_list: List[VariantData], require_gnomad: bool, gnomad_max_abs_diff: float, keep_best_duplicate: bool):
-    """Finds best match according to AF difference from list of variants and prints it
+def choose_best_variant(variant_list: List[VariantData], require_gnomad: bool, gnomad_max_abs_diff: float) -> VariantData:
+    """Finds best match according to AF difference from list of variants
 
-        Args:
-            variant_list: list of VariantData objects
-            require_gnomad: if variant not found in gnomAD, don't print variant
-            gnomad_max_abs_diff: maximum absolute difference between variant and gnomAD AF
-            keep_best_duplicate: if multiple variants, print only best match
+    Args:
+        variant_list:
+            List of VariantData objects
+        require_gnomad:
+            If variant not found in gnomAD, don't print variant
+        gnomad_max_abs_diff:
+            Maximum absolute difference between variant and gnomAD AF
+
+    Returns:
+        VarianData object containing the best match or None if variant does not pass filters
     """
 
-    if len(variant_list) > 1 and keep_best_duplicate:
+    if len(variant_list) > 1:
         diffs = [var.af_abs_diff for var in variant_list]
         best_idx = diffs.index(min(diffs))
         if (not require_gnomad or variant_list[best_idx].gnomad_af is not None) and variant_list[best_idx].af_abs_diff <= gnomad_max_abs_diff:
-            print(variant_list[best_idx])
+            return variant_list[best_idx]
+    elif (not require_gnomad or variant_list[0].gnomad_af is not None) and variant_list[0].af_abs_diff <= gnomad_max_abs_diff:
+        return variant_list[0]
     else:
-        for var in variant_list:
-            if (not require_gnomad or var.gnomad_af is not None) and var.af_abs_diff <= gnomad_max_abs_diff:
-                print(var)
+        return None
 
 
 def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned, keep_best_duplicate):
@@ -173,7 +178,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
     ref_pos = 0
     ref_h_idx = {h:i for i,h in enumerate(fp_ref.readline().strip().split('\t'))}
 
-    previous_variants = []
+    previous_vars = []
     ref_vars = []
 
     with gzip.open(file_in, 'rt') as f:
@@ -240,13 +245,21 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 var.gnomad_af = equal[best_diff_idx].af
                 var.gnomad_filt = equal[best_diff_idx].filt
 
-            if previous_variants and previous_variants[0] != var:
-                print_best_match(variant_list=previous_variants, require_gnomad=require_gnomad, gnomad_max_abs_diff=gnomad_max_abs_diff, keep_best_duplicate=keep_best_duplicate)
-                previous_variants = []
-            previous_variants.append(var)
+            if previous_vars and previous_vars[0] != var:
+                if len(previous_vars) == 1 or keep_best_duplicate:
+                    best_var = choose_best_variant(variant_list=previous_vars, require_gnomad=require_gnomad, gnomad_max_abs_diff=gnomad_max_abs_diff)
+                    if best_var:
+                        print(best_var)
+                        best_var = None
+                previous_vars = []
+            previous_vars.append(var)
 
-        if previous_variants:
-            print_best_match(variant_list=previous_variants, require_gnomad=require_gnomad, gnomad_max_abs_diff=gnomad_max_abs_diff, keep_best_duplicate=keep_best_duplicate)
+        if previous_vars:
+            if len(previous_vars) == 1 or keep_best_duplicate:
+                best_var = choose_best_variant(variant_list=previous_vars, require_gnomad=require_gnomad, gnomad_max_abs_diff=gnomad_max_abs_diff)
+                if best_var:
+                    print(best_var)
+                    best_var = None
 
 
 def run():
