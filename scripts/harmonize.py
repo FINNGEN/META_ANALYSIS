@@ -229,6 +229,8 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                 if (var == ref_var or (not pre_aligned and var.is_equal(ref_var))) and (not passing_only or ref_var.filt == 'PASS') and ref_var.an >= gnomad_min_an:
                     diff = 1
                     if ref_var.af is not None and var.af is not None:
+                        if not pre_aligned:
+                            var.equalize_to(ref_var)
                         diff = abs(var.af - ref_var.af)
                     equal.append(ref_var)
                     diffs.append(diff)
