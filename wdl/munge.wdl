@@ -1,37 +1,36 @@
 workflow munge {
 
     File sumstats_loc
-    Array[String] sumstat_files = read_lines(sumstats_loc)
+    Array[Array[String]] sumstat_files = read_tsv(sumstats_loc)
+    String gnomad_ref_template
+    #Array[String] sumstat_files = read_lines(sumstats_loc)
 
     scatter (sumstat_file in sumstat_files) {
         call clean_filter {
-            input: sumstat_file=sumstat_file
+            input: sumstat_file=sumstat_file[0]
         }
-        call sumstat_to_vcf {
-            input: sumstat_file=clean_filter.out
+        if (clean_filter.is37) {
+            call sumstat_to_vcf {
+                input: sumstat_file=clean_filter.out
+            }
+            call lift {
+                input: sumstat_vcf=sumstat_to_vcf.vcf
+            }
+            call lift_postprocess {
+                input:
+                    lifted_vcf=lift.lifted_variants_vcf,
+                    sumstat_file=clean_filter.out
+            }
         }
-        call lift {
-            input: sumstat_vcf=sumstat_to_vcf.vcf
-        }
-        call lift_postprocess {
-            input:
-                lifted_vcf=lift.lifted_variants_vcf,
-                sumstat_file=clean_filter.out
-        }
+
         call harmonize {
-            input: sumstat_file=lift_postprocess.lifted_variants
+            input:
+            sumstat_file = if clean_filter.is37 then lift_postprocess.lifted_variants else clean_filter.out,
+            gnomad_ref = sub(gnomad_ref_template, "POP", sumstat_file[1]), n=sumstat_file[2]
         }
-        call plot {
+        call plot as plot {
             input: sumstat_file=harmonize.out
         }
-    }
-
-    output {
-        Array[File] filtered_sumstats = clean_filter.out
-        Array[File] lifted_sumstats = lift_postprocess.lifted_variants
-        Array[File] rejected_variants = lift.rejected_variants
-        Array[File] harmonized_sumstats = harmonize.out
-        Array[Array[File]] plots = plot.pngs
     }
 }
 
@@ -39,6 +38,8 @@ workflow munge {
 task clean_filter {
 
     File sumstat_file
+    File b37_ref
+    File b38_ref
 
     String docker
     String chr_col
@@ -49,6 +50,9 @@ task clean_filter {
     String beta_col
     String se_col
     String pval_col
+
+    Float min_af
+    Float min_info
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
     String dollar = "$"
@@ -86,13 +90,16 @@ task clean_filter {
                     sub("^${beta_col}$", "beta", $i);
                     sub("^${se_col}$", "sebeta", $i);
                     sub("^${pval_col}$", "pval", $i);
+                    sub("^Pvalue$", "pval", $i);
+                    sub("^INFO$", "imputationInfo", $i);
+                    sub("^Rsq$", "imputationInfo", $i);
                     a[$i]=i;
                     if ($i=="POS") pos=i
                 }
                 print $0
             } NR>1 {
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
-                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>0 && (1-$a["af_alt"])>0) {
+                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>${min_af} && (1-$a["af_alt"])>${min_af} && $a["imputationInfo"]>${min_info}) {
                     printf $1
                     for (i=2; i<=NF; i++) {
                         if (i==pos) {
@@ -123,6 +130,35 @@ task clean_filter {
         if [ $(wc -l n.tmp | cut -d' ' -f1) != 1 ]; then echo "file not square"; exit 1; fi
         if [ $(wc -l chr.tmp | cut -d' ' -f1) -lt 22 ]; then echo "less than 22 chromosomes"; exit 1; fi
 
+        gunzip -c ${outfile} | head -1 | awk '
+        BEGIN{split("#CHR POS REF ALT af_alt beta sebeta pval imputationInfo", REQUIRED_FIELDS)}
+        NR==1{for(i=1;i<=NF;i++) h[$i]=i;
+              for(i in REQUIRED_FIELDS) {
+                  if (!(REQUIRED_FIELDS[i] in h)) {
+                      print REQUIRED_FIELDS[i]" expected in sumstat header">>"/dev/stderr";
+                      exit 1
+                  }
+              }
+        }'
+
+        tabix -R ${b37_ref} ${outfile} | wc -l > b37.txt
+        tabix -R ${b38_ref} ${outfile} | wc -l > b38.txt
+
+        echo "`date` `cat b37.txt` chr 21 positions build 37"
+        echo "`date` `cat b38.txt` chr 21 positions build 38"
+
+        if ((`cat b37.txt` == 0 && `cat b38.txt` == 0)); then
+            echo "`date` no chr 21 positions found in either build, quitting"
+            touch is37
+            exit 1
+        fi
+
+        if ((`cat b37.txt` > `cat b38.txt`)); then
+            echo "true" > is37
+        else
+            echo "false" > is37
+        fi
+
         echo "`date` done"
 
     >>>
@@ -130,6 +166,7 @@ task clean_filter {
     output {
         File out = outfile
         File tbi = outfile + ".tbi"
+        Boolean is37 = read_boolean("is37")
     }
 
     runtime {
@@ -137,7 +174,7 @@ task clean_filter {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -224,7 +261,7 @@ task sumstat_to_vcf {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -240,7 +277,7 @@ task lift {
     File b38_assembly_fasta
     File b38_assembly_dict
 
-    String base = basename(sumstat_vcf, ".vcf.gz")
+    String base_vcf = basename(sumstat_vcf, ".vcf.gz")
 
     command <<<
 
@@ -249,9 +286,9 @@ task lift {
         echo "`date` lifting to build 38"
         java -jar /usr/picard/picard.jar LiftoverVcf \
             -I ${sumstat_vcf} \
-            -O ${base}.GRCh38.vcf \
+            -O ${base_vcf}.GRCh38.vcf.gz \
             --CHAIN ${chainfile} \
-            --REJECT rejected_variants.vcf \
+            --REJECT rejected_variants.vcf.gz \
             -R ${b38_assembly_fasta} \
             --MAX_RECORDS_IN_RAM 500000 \
             --RECOVER_SWAPPED_REF_ALT true
@@ -259,16 +296,16 @@ task lift {
     >>>
 
     output {
-        File lifted_variants_vcf = base + ".GRCh38.vcf"
-        File rejected_variants = "rejected_variants.vcf"
+        File lifted_variants_vcf = base_vcf + ".GRCh38.vcf.gz"
+        File rejected_variants = "rejected_variants.vcf.gz"
     }
 
     runtime {
         docker: "${docker}"
         cpu: "1"
         memory: "32 GB"
-        disks: "local-disk " + 10*ceil(size(sumstat_vcf, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        disks: "local-disk " + 20*ceil(size(sumstat_vcf, "G")) + " HDD"
+        zones: "us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -290,7 +327,7 @@ task lift_postprocess {
         set -eux
 
         # Sort by old positions
-        grep -v "^#" ${lifted_vcf} | tr ":" "\t" | awk '
+        zcat ${lifted_vcf} | grep -v "^#" | tr ":" "\t" | awk '
         BEGIN{OFS="\t"}
         { gsub("chr", ""); gsub("X", "23"); gsub("Y", "24"); print $1,$2,$7,$8,$3,$4,$5,$6,$11 }
         ' | sort -k5,5g -k6,6g > ${base}.tsv
@@ -383,8 +420,8 @@ task lift_postprocess {
         docker: "${docker}"
         cpu: "1"
         memory: "2 GB"
-        disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + 2*size(sumstat_file, "G")) + " HDD"
+        zones: "us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -397,6 +434,7 @@ task harmonize {
 
     String docker
     File gnomad_ref
+    Int n
     String options
 
     String base = basename(sumstat_file, ".tsv.gz")
@@ -415,9 +453,9 @@ task harmonize {
         mv ${gnomad_ref} ${gnomad_ref_base}
 
         echo "`date` harmonizing stats with gnomAD"
-        python3 /META_ANALYSIS/scripts/harmonize.py ${base} ${gnomad_ref_base} ${options} \
+        python3 /META_ANALYSIS/scripts/harmonize.py ${base} ${gnomad_ref_base} ${n} ${options} \
         | bgzip > ${base}.${gnomad_ref_base}
-        
+
         tabix -s 1 -b 2 -e 2 ${base}.${gnomad_ref_base}
         echo "`date` done"
 
@@ -433,7 +471,7 @@ task harmonize {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G") + size(gnomad_ref, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -481,7 +519,7 @@ task plot {
         cpu: "1"
         memory: "20 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-d"
         preemptible: 2
         noAddress: true
     }

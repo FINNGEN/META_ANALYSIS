@@ -27,7 +27,7 @@ class Variant():
         """Checks if two variants are equal.
 
         Checks if this Variant is the same variant as given other variant (possibly different strand or ordering of alleles).
-        
+
         Args:
             other:
                 Variant as Variant object to compare this variant to.
@@ -55,23 +55,24 @@ class Variant():
                 return True
 
         return False
-    
+
 
 class VariantData(Variant):
 
-    def __init__(self, chr, pos, ref, alt, af, beta, extra_cols=[], gnomad_af=None, gnomad_filt='NA'):
+    def __init__(self, chr, pos, ref, alt, af, beta, n, extra_cols=[], gnomad_af=None, gnomad_filt='NA'):
         super().__init__(chr, pos, ref, alt, af)
         self.beta = float(beta) if beta != 'NA' else None
         self.extra_cols = extra_cols
         self.gnomad_af = gnomad_af
         self.fc = None
         self.gnomad_filt = gnomad_filt
+        self.n = n
 
     def equalize_to(self, other:'Variant') -> bool:
         """Checks if two variants are equal and changes this variant's alleles and beta accordingly.
 
         Checks if this Variant is the same variant as given other variant (possibly different strand or ordering of alleles) and changes this variant's alleles and beta accordingly.
-        
+
         Args:
             other:
                 Variant as Variant object to compare this variant to.
@@ -84,7 +85,7 @@ class VariantData(Variant):
 
             if self.ref== other.ref and self.alt == other.alt :
                 return True
-            
+
             flip_ref = flip_strand(other.ref)
             flip_alt = flip_strand(other.alt)
 
@@ -121,7 +122,7 @@ class VariantData(Variant):
     def __str__(self):
         cols = [str(self.chr), str(self.pos), self.ref, self.alt, str(self.af), str(self.beta)]
         cols.extend(self.extra_cols)
-        cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_fc, 3), self.gnomad_filt])
+        cols.extend([format_num(self.gnomad_af, 3), format_num(self.af_fc, 3), self.gnomad_filt, str(self.n)])
         return '\t'.join(cols)
 
 
@@ -133,10 +134,10 @@ class VariantGnomad(Variant):
         self.an = int(an)
 
 
-def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned):
+def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned, n_total):
 
     required_cols = [chr_col, pos_col, ref_col, alt_col, af_col, beta_col]
-    
+
     fp_ref = gzip.open(file_ref, 'rt')
     ref_has_lines = True
     ref_chr = 1
@@ -146,8 +147,9 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
     with gzip.open(file_in, 'rt') as f:
         header = f.readline().strip().split('\t')
         h_idx = {h:i for i,h in enumerate(header)}
+        has_n = 'N' in h_idx
         extra_cols = [h for h in header if not h in required_cols]
-        print('\t'.join(required_cols + extra_cols + ['af_gnomad','af_fc','filt_gnomad']))
+        print('\t'.join(required_cols + extra_cols + ['af_gnomad','af_fc','filt_gnomad','N']))
         for line in f:
             s = line.strip().split('\t')
             var = VariantData(chr = s[h_idx[chr_col]],
@@ -156,6 +158,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
                               alt = s[h_idx[alt_col]],
                               af = s[h_idx[af_col]],
                               beta = s[h_idx[beta_col]],
+                              n = int(float(s[h_idx['N']])) if has_n else n_total,
                               extra_cols = [s[h_idx[extra_col]] for extra_col in extra_cols])
             ref_vars = []
             while ref_has_lines and ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos):
@@ -207,11 +210,12 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
 
             if (not require_gnomad or len(equal) > 0) and best_diff <= gnomad_max_abs_diff:
                 print(var)
-            
+
 def run():
     parser = argparse.ArgumentParser(description="Harmonize GWAS summary stats to reference")
     parser.add_argument('file_in', action='store', type=str, help='GWAS summary stats')
     parser.add_argument('file_ref', action='store', type=str, help='GnomAD reference file')
+    parser.add_argument('n', action='store', type=int, help='Total sample size')
     parser.add_argument('--chr_col', action='store', type=str, default='#CHR', help='Chromosome column')
     parser.add_argument('--pos_col', action='store', type=str, default='POS', help='Position column')
     parser.add_argument('--ref_col', action='store', type=str, default='REF', help='Reference allele column')
@@ -236,7 +240,8 @@ def run():
               passing_only = args.passing_only,
               gnomad_min_an = args.gnomad_min_an,
               gnomad_max_abs_diff = args.gnomad_max_abs_diff,
-              pre_aligned = args.pre_aligned)
-    
+              pre_aligned = args.pre_aligned,
+              n_total = args.n)
+
 if __name__ == '__main__':
     run()
