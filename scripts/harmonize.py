@@ -198,7 +198,7 @@ def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, bet
             
             if not ref_vars or ref_vars[0] < var:
                 ref_vars = []
-                while ref_has_lines and ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos):
+                while ref_has_lines and (ref_chr < var.chr or (ref_chr == var.chr and ref_pos < var.pos)):
                     ref_line = fp_ref.readline()
                     if ref_line != '':
                         r = ref_line.strip().split('\t')
