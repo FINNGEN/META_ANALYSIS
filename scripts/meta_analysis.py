@@ -327,14 +327,14 @@ class Study:
 
     OPTIONAL_FIELDS = {"se":str}
 
-    def __init__(self, conf, chrom=None, dont_allow_space=False, flip_indels=False):
+    def __init__(self, conf, chrom=None, sep='\t', flip_indels=False):
         '''
         chrom: a chromosome to limit to or None if all chromosomes
-        dont_allow_space: boolean, don't treat space as field delimiter (only tab)
+        sep: field separator (default: "\t")
         '''
         self.conf = conf
         self.chrom = chrord[chrom] if chrom is not None else None
-        self.dont_allow_space = dont_allow_space
+        self.sep = sep
         self.flip_indels = flip_indels
         self.future = deque()
         self.eff_size = None
@@ -362,10 +362,7 @@ class Study:
                     " in configuration: " + str(self.conf) + ". ERR:" + str(e))
 
         self.conf["fpoint"] = gzip.open(conf["file"],'rt')
-        if self.dont_allow_space:
-            self.header = conf["fpoint"].readline().rstrip().split('\t')
-        else:
-            self.header = conf["fpoint"].readline().rstrip().split()
+        self.header = conf["fpoint"].readline().rstrip().split(self.sep)
 
         for k in Study.REQUIRED_DATA_FIELDS.keys():
             if self.conf[k] not in self.header:
@@ -441,10 +438,7 @@ class Study:
                 if l=="":
                     return None if len(vars) == 0 else vars
 
-                if self.dont_allow_space:
-                    l = l.rstrip().split('\t')
-                else:
-                    l = l.rstrip().split()
+                l = l.rstrip().split(self.sep)
 
                 if len(l) != len(self.header):
                     raise Exception("Number of fields in header and line do not match for study " + self.name + " in file " + self.conf['file'] + ".\nOffending line: " + "\t".join(l))
@@ -548,14 +542,14 @@ class Study:
         self.future.extendleft(variantlist)
 
 
-def get_studies(conf:str, chrom, dont_allow_space, flip_indels) -> List[Study]:
+def get_studies(conf:str, chrom, sep, flip_indels) -> List[Study]:
     """
         Reads json configuration and returns studies in the meta
     """
 
     studies_conf = json.load(open(conf,'r'))
 
-    return [ Study(s, chrom, dont_allow_space, flip_indels) for s in studies_conf["meta"]]
+    return [ Study(s, chrom, sep, flip_indels) for s in studies_conf["meta"]]
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[Tuple] :
     '''
@@ -667,13 +661,13 @@ def run():
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
     parser.add_argument('--is_het_test', action='store_true', help='Do heterogeneity tests based on Cochrans Q and output het_p')
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.add_argument('--dont_allow_space', action='store_true', help='Do not allow space as field delimiter')
+    parser.add_argument('--sep', default='\t', help='Input file field separator (Default: "\t"')
     parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
     parser.add_argument('--flip_indels', action='store_true', help='Try variant aligning by flipping indels also. By default indels are not flipped')
 
     args = parser.parse_args()
 
-    studs = get_studies(args.config_file, args.chrom, args.dont_allow_space, args.flip_indels)
+    studs = get_studies(args.config_file, args.chrom, args.sep, args.flip_indels)
 
     methods = []
 
