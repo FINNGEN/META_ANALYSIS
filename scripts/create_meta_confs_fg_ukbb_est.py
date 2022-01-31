@@ -26,7 +26,7 @@ def generate_json(mapping):
         'effect_type': 'beta',
         'pval': 'pval',
         'se': 'sebeta',
-        'extra_cols': ['af_alt', 'af_alt_cases', 'af_alt_controls', 'nearest_genes']
+        'extra_cols': ['af_alt', 'af_alt_cases', 'af_alt_controls']
     }
 
     ukbb_conf = {
@@ -42,7 +42,7 @@ def generate_json(mapping):
         'effect_type': 'beta',
         'pval': 'pval',
         'se': 'sebeta',
-        'extra_cols': []
+        'extra_cols': ["af_alt"]
     }
 
     est_conf = {
@@ -58,7 +58,7 @@ def generate_json(mapping):
         'effect_type': 'beta',
         'pval': 'pval',
         'se': 'sebeta',
-        'extra_cols': ["af_alt", "AF.Cases", "AF.Controls", "b37_chr", "b37_pos", "b37_ref", "b37_alt", "liftover_info", "af_gnomad", "af_fc"]
+        'extra_cols': ["af_alt"]
     }
 
     json_file = 'jsons/' + mapping['fg_phenotype'] + '.json' if os.path.isdir('jsons') else mapping['fg_phenotype'] + '.json'
@@ -85,6 +85,8 @@ def run():
     for col in OPTIONAL_COLS:
         if col not in mapping.columns:
             mapping[col] = 0
+    mapping = mapping[REQUIRED_COLS + OPTIONAL_COLS]
+    mapping[OPTIONAL_COLS] = mapping[OPTIONAL_COLS].fillna(0)
     mapping.dropna(axis=0, how='any', inplace=True)
 
     # Print summary stat links to file
@@ -97,10 +99,8 @@ def run():
 
     # Generate json configs for meta-analysis
     print('Generating config files...')
-    jsons_dir=False
     try:
         os.mkdir('jsons')
-        jsons_dir=True
     except OSError as error:
         print(error)
     mapping.apply(generate_json, axis=1)
@@ -110,9 +110,9 @@ def run():
             for pheno in mapping['fg_phenotype']:
                 f.write(os.path.join(args.bucket, 'jsons', pheno) + '.json\n')
         print(f'Transferring files to bucket {args.bucket} ...')
-        cmd_1 = f'gsutil cp {args.sumstat_filelist_name} {args.bucket}'
-        cmd_2 = f'gsutil cp {args.json_filelist_name} {args.bucket}'
-        cmd_3 = f'gsutil -m cp -r jsons/ {args.bucket}'
+        cmd_1 = f'gsutil -q cp {args.sumstat_filelist_name} {args.bucket}'
+        cmd_2 = f'gsutil -q cp {args.json_filelist_name} {args.bucket}'
+        cmd_3 = f'gsutil -q -m cp -r jsons/ {args.bucket}'
         subprocess.run(shlex.split(cmd_1))
         subprocess.run(shlex.split(cmd_2))
         subprocess.run(shlex.split(cmd_3))
