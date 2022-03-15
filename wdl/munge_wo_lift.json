@@ -9,9 +9,9 @@
     "munge.clean_filter.beta_col": "BETA",
     "munge.clean_filter.se_col": "SE",
     "munge.clean_filter.pval_col": "p.value",
-    "munge.harmonize.docker": "eu.gcr.io/finngen-refinery-dev/meta:4bd7c98",
+    "munge.harmonize.docker": "eu.gcr.io/finngen-refinery-dev/meta:b9ed38b",
     "munge.harmonize.gnomad_ref": "gs://gnomad2/gnomad_v2.1.1_b37_ref_nfe.gz",
     "munge.harmonize.options": "",
-    "munge.plot.docker": "eu.gcr.io/finngen-refinery-dev/meta:4bd7c98",
+    "munge.plot.docker": "eu.gcr.io/finngen-refinery-dev/meta:b9ed38b",
     "munge.plot.loglog_ylim": 20
 }
