@@ -5,6 +5,7 @@ workflow meta_analysis {
     input {
         File sumstats_loc
         File pheno_confs
+        String docker
 
         Array[Array[String]] sumstat_files = read_tsv(sumstats_loc)
         Array[String] pheno_conf = read_lines(pheno_confs)
@@ -20,29 +21,35 @@ workflow meta_analysis {
                     pheno = pheno,
                     conf = pheno_conf[i],
                     sumstat_files = sumstat_files[i],
-                    chrom = chr+1
+                    chrom = chr+1,
+                    docker = docker
             }
         }
 
         call combine_chrom_metas {
             input:
                 pheno = pheno,
-                meta_outs = run_range.out
+                meta_outs = run_range.out,
+                docker = docker
         }
 
         call add_rsids {
             input:
-                meta_file = combine_chrom_metas.meta_out
+                meta_file = combine_chrom_metas.meta_out,
+                docker = docker
         }
 
-        call meta_qq {
+        call plots {
             input:
-                meta_file = combine_chrom_metas.meta_out
+                meta_file = combine_chrom_metas.meta_out,
+                conf = pheno_conf[i],
+                docker = docker
         }
 
         call post_filter {
             input:
-                meta_file = add_rsids.meta_out
+                meta_file = add_rsids.meta_out,
+                docker = docker
         }
 
     }
@@ -51,8 +58,8 @@ workflow meta_analysis {
         Array[File] metas = combine_chrom_metas.meta_out
         Array[File] metas_with_rsids = add_rsids.meta_out
         Array[File] filtered_metas = post_filter.filtered_meta_out
-        Array[Array[File]] meta_pngs = meta_qq.pngs
-        Array[Array[File]] meta_lambdas = meta_qq.lambdas
+        Array[Array[File]] pngs = plots.pngs
+        Array[Array[File]] lambdas = plots.lambdas
     }
 }
 
@@ -64,8 +71,8 @@ task run_range {
         String pheno
         String chrom
         File conf
-
         String docker
+
         String method
         String opts
     }
@@ -106,7 +113,6 @@ task combine_chrom_metas {
     input {
         Array[File] meta_outs
         String pheno
-
         String docker
     }
 
@@ -148,9 +154,9 @@ task add_rsids {
 
     input {
         File meta_file
+        String docker
 
         File ref_file
-        String docker
 
         String base = basename(meta_file, ".tsv.gz")
     }
@@ -237,14 +243,15 @@ task add_rsids {
 
 }
 
-# Generate qq and manhattan plots from meta-analysis results
-task meta_qq {
+# Generate qc plots from meta-analysis results
+task plots {
 
     input {
         File meta_file
+        File conf
+        String docker
 
         Int loglog_ylim
-        String docker
         String pvals_to_plot
 
         String base = basename(meta_file)
@@ -255,6 +262,8 @@ task meta_qq {
         set -euxo pipefail
 
         mv ~{meta_file} ~{base}
+
+        /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf}
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}
 
@@ -281,7 +290,6 @@ task post_filter {
 
     input {
         File meta_file
-
         String docker
 
         String base = basename(meta_file, ".tsv.gz")
