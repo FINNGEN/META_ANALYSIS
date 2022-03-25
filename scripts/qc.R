@@ -4,7 +4,6 @@ packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson")
 
 for (p in packs) {
   if (!require(p, character.only = T)) {
-    print(p)
     install.packages(p,  repos = c(CRAN = "http://cran.r-project.org"))
   }
 }
@@ -47,7 +46,7 @@ file <- opt$options$file
 print(paste("reading file:", file))
 
 data <- fread(file, header = T)
-conf <- fromJSON(file = opt$options$conf)
+conf <- rjson::fromJSON(file = opt$options$conf)
 
 studies <- sapply(conf$meta, function(x) x$name)
 leave <- any(grepl("^leave_", colnames(data)))
