@@ -1,7 +1,7 @@
 {
     "meta_analysis.sumstats_loc": "gs://juham-fg/meta-analysis/E4_HYTHY_AI_STRICT_sumstat_files.txt",
     "meta_analysis.pheno_confs": "gs://juham-fg/meta-analysis/E4_HYTHY_AI_STRICT_conf_json.txt",
-    "meta_analysis.docker": "eu.gcr.io/finngen-refinery-dev/meta:975b90d",
+    "meta_analysis.docker": "eu.gcr.io/finngen-refinery-dev/meta:93a5c02",
     "meta_analysis.run_range.method": "inv_var",
     "meta_analysis.run_range.opts": "--is_het_test --leave_one_out",
     "meta_analysis.add_rsids.ref_file": "gs://autoreporting_resources/dbsnp_vcf/dbsnp_hg38p13_b153_numerical.vcf.gz",
