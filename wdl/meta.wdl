@@ -263,7 +263,12 @@ task plots {
 
         mv ~{meta_file} ~{base}
 
-        /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf}
+        if [[ "~{loglog_ylim}" =~ "leave_" ]]
+        then
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo
+        else
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf}
+        fi
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}
 
@@ -272,6 +277,7 @@ task plots {
     output {
         Array[File] pngs = glob("*.png")
         Array[File] lambdas = glob("*.txt")
+        Array[File] qc = glob("*.tsv")
     }
 
     runtime {

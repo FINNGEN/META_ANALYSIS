@@ -13,6 +13,14 @@ option_list <- list(
               help="dataset file name", metavar="character"),
   make_option(c("-o", "--out"), type="character",
               help="output file name [default= %default]", metavar="character"),
+  make_option(c("-m","--method"), type="character", default="inv_var",
+              help="meta-analysis method [default= %default]", metavar="character"),
+  make_option(c("-l","--loo"), action="store_true",
+              help="use leave-one-out results [default= %default]"),
+  make_option("--conf", type="character", default=NULL,
+              help="meta-analysis config json", metavar="character"),
+  make_option("--pval_thresh", type="character", default=5e-8,
+              help="meta-analysis config json", metavar="numeric"),
   make_option(c("-c","--chr_col"), type="character", default="#CHR",
               help="chromosome column [default= %default]", metavar="character"),
   make_option(c("-b","--bp_col"), type="character", default="POS",
@@ -20,13 +28,7 @@ option_list <- list(
   make_option(c("-r","--ref_col"), type="character", default="REF",
               help="ref column [default= %default]", metavar="character"),
   make_option(c("-a","--alt_col"), type="character", default="ALT",
-              help="alt column [default= %default]", metavar="character"),
-  make_option(c("-m","--method"), type="character", default="inv_var",
-              help="meta-analysis method [default= %default]", metavar="character"),
-  make_option("--conf", type="character", default=NULL,
-              help="meta-analysis config json", metavar="character"),
-  make_option("--pval_thresh", type="character", default=5e-8,
-              help="meta-analysis config json", metavar="numeric")
+              help="alt column [default= %default]", metavar="character")
 );
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -41,15 +43,12 @@ ref_col <- opt$options$ref_col
 alt_col <- opt$options$alt_col
 method <- opt$options$method
 pval_thresh <- opt$options$pval_thresh
+leave <- opt$options$loo
 
 file <- opt$options$file
-print(paste("reading file:", file))
-
-data <- fread(file, header = T)
 conf <- rjson::fromJSON(file = opt$options$conf)
 
 studies <- sapply(conf$meta, function(x) x$name)
-leave <- any(grepl("^leave_", colnames(data)))
 
 study_pval_cols <- sapply(conf$meta, function(x) paste(x$name, x$pval, sep = "_"))
 meta_pval_col <- paste("all", method, "meta_p", sep = "_")
@@ -59,7 +58,7 @@ meta_beta_col <- paste("all", method, "meta_beta", sep = "_")
 
 het_p_col <- paste("all", method, "het_p", sep = "_")
 
-keep_cols <- c(study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
+keep_cols <- c(chr_col, bp_col, ref_col, alt_col, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
 
 if (leave) {
   leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
@@ -68,29 +67,36 @@ if (leave) {
   keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols)
 }
 
-if (any(! keep_cols %in% colnames(data))) {
-  stop(paste("All required columns do not exist in the data:", paste(keep_cols, collapse = ", ")))
-}
+data <- fread(file, header = T, select = keep_cols)
 
-data <- data[, ..keep_cols]
+# Get gw signif hits, 1MB regions, each study
+# TODO
+tempdata <- data[data[[meta_pval_col]] < 5e-8]
 
-output_prefix <- ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out)
-
-pass <- data[[meta_pval_col]] < pval_thresh
+pass <- data[[study_pval_cols[1]]] < pval_thresh
 while (sum(pass) < 5) {
   pval_thresh <- pval_thresh + 1e-8
-  pass <- data[[meta_pval_col]] < pval_thresh
+  pass <- data[[study_pval_cols[1]]] < pval_thresh
 }
 
 data <- data[pass]
 
-pdf(paste0(output_prefix, "_qc.pval_lt_", pval_thresh, ".pdf"))
+qc_dt <- data.table()
+
+m <- lm(as.formula(paste(study_beta_cols[1], "~", meta_beta_col)), data = data)
+ms <- summary(m)
+qc_dt[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := round(ms$coefficients[2,1], 3)]
+qc_dt[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := round(ms$r.squared, 3)]
+qc_dt[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+
+output_prefix <- ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out)
+output_prefix <- paste0(output_prefix, "_qc.pval_lt_", pval_thresh)
+pdf(paste0(output_prefix, ".pdf"))
 
 # P-value comparisons scatter plot
 for (i in 2:length(study_pval_cols)) {
   tempcols <- study_pval_cols[c(1,i)]
-  #tempdata <- na.omit(data[, ..tempcols])
-  tempdata <- -log10(data[, ..tempcols])
+  tempdata <- -log10(na.omit(data[, ..tempcols]))
   p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2])) +
     geom_point() +
     #geom_smooth(method = "lm", se = F) +
@@ -105,9 +111,7 @@ for (i in 2:length(study_pval_cols)) {
 # Effect size comparisons scatter plot
 for (i in 2:length(study_beta_cols)) {
   tempcols <- study_beta_cols[c(1,i)]
-  #tempdata <- na.omit(data[, ..tempcols])
-  #tempdata <- abs(data[, ..tempcols])
-  tempdata <- data[, ..tempcols]
+  tempdata <- na.omit(data[, ..tempcols])
   p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2])) +
     geom_point() +
     #geom_smooth(method = "lm", se = F) +
@@ -119,6 +123,7 @@ for (i in 2:length(study_beta_cols)) {
     ylab(paste0(studies[i], "_beta")) +
     theme_bw()
   plot(p)
+
 }
 
 # Het p histogram
@@ -141,7 +146,10 @@ p <- ggplot(diff, aes(x = V1)) +
   theme_bw()
 plot(p)
 
+qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta", sep = "_")) := round(sum(diff > 0) / length(diff[[1]]), 3)]
 
+
+# Leave-one-out qc
 if (leave) {
   pval_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
   tempdata <- -log10(data[, ..pval_cols])
@@ -153,7 +161,12 @@ if (leave) {
       ggtitle(paste0("Is ", studies[1], " p-value getting stronger in meta-analysis (drop ", studies[i], ")")) +
       theme_bw()
     plot(p)
+    
+    qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta_leave", studies[i], sep = "_")) := round(sum(diff > 0) / length(diff[[1]]), 3)]
+    
   }
 }
 
 graphics.off()
+
+fwrite(qc_dt, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t")
