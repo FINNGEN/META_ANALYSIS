@@ -12,23 +12,27 @@ option_list <- list(
   make_option(c("-f", "--file"), type="character", default=NULL,
               help="dataset file name", metavar="character"),
   make_option(c("-o", "--out"), type="character",
-              help="output file name [default= %default]", metavar="character"),
+              help="output file name [default=%default]", metavar="character"),
   make_option(c("-m","--method"), type="character", default="inv_var",
-              help="meta-analysis method [default= %default]", metavar="character"),
-  make_option(c("-l","--loo"), action="store_true",
-              help="use leave-one-out results [default= %default]"),
+              help="meta-analysis method [default=%default]", metavar="character"),
+  make_option(c("-l","--loo"), action="store_true", default=FALSE,
+              help="use leave-one-out results [default=%default]"),
   make_option("--conf", type="character", default=NULL,
               help="meta-analysis config json", metavar="character"),
   make_option("--pval_thresh", type="character", default=5e-8,
-              help="meta-analysis config json", metavar="numeric"),
+              help="p-value threshold used to get SNPs to plot", metavar="numeric"),
+  make_option("--region", type="numeric", default=1.0,
+              help="region size in megabases used when counting unique loci hits", metavar="numeric"),
   make_option(c("-c","--chr_col"), type="character", default="#CHR",
-              help="chromosome column [default= %default]", metavar="character"),
+              help="chromosome column [default=%default]", metavar="character"),
   make_option(c("-b","--bp_col"), type="character", default="POS",
-              help="bp column [default= %default]", metavar="character"),
+              help="bp column [default=%default]", metavar="character"),
   make_option(c("-r","--ref_col"), type="character", default="REF",
-              help="ref column [default= %default]", metavar="character"),
+              help="ref column [default=%default]", metavar="character"),
   make_option(c("-a","--alt_col"), type="character", default="ALT",
-              help="alt column [default= %default]", metavar="character")
+              help="alt column [default=%default]", metavar="character"),
+  make_option(c("--af_col"), type="character", default="af_alt",
+              help="af column [default=%default]", metavar="character")
 );
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -41,9 +45,12 @@ chr_col <- opt$options$chr_col
 bp_col <- opt$options$bp_col
 ref_col <- opt$options$ref_col
 alt_col <- opt$options$alt_col
+af_col <- opt$options$af_col
 method <- opt$options$method
 pval_thresh <- opt$options$pval_thresh
 leave <- opt$options$loo
+region <- opt$options$region
+region <- round(region * 10^6 / 2, 0)
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
@@ -58,7 +65,7 @@ meta_beta_col <- paste("all", method, "meta_beta", sep = "_")
 
 het_p_col <- paste("all", method, "het_p", sep = "_")
 
-keep_cols <- c(chr_col, bp_col, ref_col, alt_col, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
+keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_col, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
 
 if (leave) {
   leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
@@ -70,8 +77,20 @@ if (leave) {
 data <- fread(file, header = T, select = keep_cols)
 
 # Get gw signif hits, 1MB regions, each study
-# TODO
-tempdata <- data[data[[meta_pval_col]] < 5e-8]
+keep_cols2 <- c(chr_col, bp_col, meta_pval_col)
+tempdata <- data[data[[meta_pval_col]] < 5e-8, ..keep_cols2]
+gw_sig_loci <- 0
+while (nrow(tempdata) > 0) {
+  maxrow <- tempdata[which.min(tempdata[[meta_pval_col]])]
+  maxrow_u_bp <- maxrow[[bp_col]] + region
+  maxrow_l_bp <- maxrow[[bp_col]] - region
+  maxrow_chr <- maxrow[[chr_col]]
+  in_region <- tempdata[[chr_col]] == maxrow_chr & tempdata[[bp_col]] >= maxrow_l_bp & tempdata[[bp_col]] <= maxrow_u_bp
+  tempdata <- tempdata[! in_region]
+  gw_sig_loci <- gw_sig_loci + 1
+}
+rm(keep_cols2, tempdata)
+qc_dt <- data.table(gw_sig_loci = gw_sig_loci)
 
 pass <- data[[study_pval_cols[1]]] < pval_thresh
 while (sum(pass) < 5) {
@@ -80,8 +99,6 @@ while (sum(pass) < 5) {
 }
 
 data <- data[pass]
-
-qc_dt <- data.table()
 
 m <- lm(as.formula(paste(study_beta_cols[1], "~", meta_beta_col)), data = data)
 ms <- summary(m)
@@ -96,23 +113,26 @@ pdf(paste0(output_prefix, ".pdf"))
 # P-value comparisons scatter plot
 for (i in 2:length(study_pval_cols)) {
   tempcols <- study_pval_cols[c(1,i)]
-  tempdata <- -log10(na.omit(data[, ..tempcols]))
-  p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2])) +
+  tempdata <- na.omit(cbind(-log10(data[, ..tempcols]), data[, ..af_col]))
+  tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(1, 0.05, 0.01, 0))
+  p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2], color = af_col)) +
     geom_point() +
     #geom_smooth(method = "lm", se = F) +
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
     expand_limits(x = 0, y = 0) +
     xlab(paste0(studies[1], "_mlogp")) +
     ylab(paste0(studies[i], "_mlogp")) +
+    scale_color_manual(labels = levels(tempdata[[af_col]]), values = c("#F8766D", "#00BA38", "#619CFF"), drop = F) +
     theme_bw()
   plot(p)
 }
 
 # Effect size comparisons scatter plot
 for (i in 2:length(study_beta_cols)) {
-  tempcols <- study_beta_cols[c(1,i)]
+  tempcols <- c(study_beta_cols[c(1,i)], af_col)
   tempdata <- na.omit(data[, ..tempcols])
-  p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2])) +
+  tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(1, 0.05, 0.01, 0))
+  p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2], color = af_col)) +
     geom_point() +
     #geom_smooth(method = "lm", se = F) +
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
@@ -121,14 +141,14 @@ for (i in 2:length(study_beta_cols)) {
     #ylab(paste0("abs(", studies[i], "_beta)")) +
     xlab(paste0(studies[1], "_beta")) +
     ylab(paste0(studies[i], "_beta")) +
+    scale_color_manual(labels = levels(tempdata[[af_col]]), values = c("#F8766D", "#00BA38", "#619CFF"), drop = F) +
     theme_bw()
   plot(p)
-
 }
 
 # Het p histogram
 tempdata <- -log10(na.omit(data[, ..het_p_col]))
-p <- ggplot(tempdata, aes_string(x = het_p_col)) + 
+p <- ggplot(tempdata, aes_string(x = het_p_col)) +
   geom_histogram() +
   xlab(paste("all", method, "het_mlogp", sep = "_")) +
   ggtitle("Heterogeneity -log10(p-value) distribution") +
@@ -143,6 +163,7 @@ p <- ggplot(diff, aes(x = V1)) +
   geom_histogram(binwidth = .5) +
   xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
   ggtitle(paste("Is", studies[1], "p-value getting stronger in meta-analysis (all studies)")) +
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
   theme_bw()
 plot(p)
 
@@ -159,11 +180,11 @@ if (leave) {
       geom_histogram(binwidth = .5) +
       xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
       ggtitle(paste0("Is ", studies[1], " p-value getting stronger in meta-analysis (drop ", studies[i], ")")) +
+      geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
       theme_bw()
     plot(p)
     
     qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta_leave", studies[i], sep = "_")) := round(sum(diff > 0) / length(diff[[1]]), 3)]
-    
   }
 }
 
