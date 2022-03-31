@@ -93,7 +93,7 @@ rm(keep_cols2, tempdata)
 qc_dt <- data.table(gw_sig_loci = gw_sig_loci)
 
 pass <- data[[study_pval_cols[1]]] < pval_thresh
-while (sum(pass) < 5) {
+while (sum(pass, na.rm = T) < 5) {
   pval_thresh <- pval_thresh + 1e-8
   pass <- data[[study_pval_cols[1]]] < pval_thresh
 }
