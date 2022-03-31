@@ -266,9 +266,9 @@ task plots {
 
         if [[ "~{loglog_ylim}" =~ "leave_" ]]
         then
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_alt ~{af_col}
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_col ~{af_col}
         else
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_alt ~{af_col}
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_col ~{af_col}
         fi
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}
