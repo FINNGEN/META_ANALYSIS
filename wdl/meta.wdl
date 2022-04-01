@@ -59,7 +59,9 @@ workflow meta_analysis {
         Array[File] metas_with_rsids = add_rsids.meta_out
         Array[File] filtered_metas = post_filter.filtered_meta_out
         Array[Array[File]] pngs = plots.pngs
+        Array[Array[File]] pdfs = plots.pdfs
         Array[Array[File]] lambdas = plots.lambdas
+        Array[Array[File]] qc = plots.qc
     }
 }
 
@@ -277,6 +279,7 @@ task plots {
 
     output {
         Array[File] pngs = glob("*.png")
+        Array[File] pdfs = glob("*.pdf")
         Array[File] lambdas = glob("*.txt")
         Array[File] qc = glob("*.tsv")
     }
