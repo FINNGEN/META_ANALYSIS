@@ -54,6 +54,12 @@ workflow meta_analysis {
 
     }
 
+    call gather_qc {
+        input:
+            qc = plots.qc,
+            docker = docker
+    }
+
     output {
         Array[File] metas = combine_chrom_metas.meta_out
         Array[File] metas_with_rsids = add_rsids.meta_out
@@ -328,6 +334,41 @@ task post_filter {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        preemptible: 2
+        noAddress: true
+    }
+}
+
+# Gather qc metrics to one file
+task gather_qc {
+
+    input {
+        Array[Array[File]] qc
+        String docker
+
+        Array[File] qcs = flatten(qc)
+    }
+
+    command <<<
+
+        cat <(head -1 ~{qcs[0]}) \
+            <(for file in ~{sep=" " qcs}; do
+                tail -n +2 $file;
+            done) \
+        > qc.tsv
+
+    >>>
+
+    output {
+        File qc = "qc.tsv"
+    }
+    
+    runtime {
+        docker: "~{docker}"
+        cpu: 1
+        memory: "2 GB"
+        disks: "local-disk 2 HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
