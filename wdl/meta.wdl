@@ -43,6 +43,7 @@ workflow meta_analysis {
             input:
                 meta_file = combine_chrom_metas.meta_out,
                 conf = pheno_conf[i],
+                pheno = pheno,
                 docker = docker
         }
 
@@ -257,6 +258,7 @@ task plots {
     input {
         File meta_file
         File conf
+        String pheno
         String docker
 
         Int loglog_ylim
@@ -274,9 +276,9 @@ task plots {
 
         if [[ "~{loglog_ylim}" =~ "leave_" ]]
         then
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_col ~{af_col}
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_col ~{af_col} --pheno ~{pheno}
         else
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_col ~{af_col}
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_col ~{af_col} --pheno ~{pheno}
         fi
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}

@@ -32,7 +32,9 @@ option_list <- list(
   make_option(c("-a","--alt_col"), type="character", default="ALT",
               help="alt column [default=%default]", metavar="character"),
   make_option(c("--af_col"), type="character", default="af_alt",
-              help="af column [default=%default]", metavar="character")
+              help="af column [default=%default]", metavar="character"),
+  make_option(c("--pheno"), type="character", default="pheno",
+              help="phenotype name [default=%default]", metavar="character")
 );
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -46,6 +48,7 @@ bp_col <- opt$options$bp_col
 ref_col <- opt$options$ref_col
 alt_col <- opt$options$alt_col
 af_col <- opt$options$af_col
+pheno <- opt$options$pheno
 method <- opt$options$method
 pval_thresh <- opt$options$pval_thresh
 leave <- opt$options$loo
@@ -90,7 +93,7 @@ while (nrow(tempdata) > 0) {
   gw_sig_loci <- gw_sig_loci + 1
 }
 rm(keep_cols2, tempdata)
-qc_dt <- data.table(gw_sig_loci = gw_sig_loci)
+qc_dt <- data.table(pheno = pheno, gw_sig_loci = gw_sig_loci)
 
 pass <- data[[study_pval_cols[1]]] < pval_thresh
 while (sum(pass, na.rm = T) < 5) {
