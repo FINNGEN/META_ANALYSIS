@@ -19,7 +19,7 @@ option_list <- list(
               help="use leave-one-out results [default=%default]"),
   make_option("--conf", type="character", default=NULL,
               help="meta-analysis config json", metavar="character"),
-  make_option("--pval_thresh", type="character", default=5e-8,
+  make_option("--pval_thresh", type="numeric", default=5e-8,
               help="p-value threshold used to get SNPs to plot", metavar="numeric"),
   make_option("--region", type="numeric", default=1.0,
               help="region size in megabases used when counting unique loci hits", metavar="numeric"),
@@ -81,7 +81,7 @@ data <- fread(file, header = T, select = keep_cols)
 
 # Get gw signif hits, 1MB regions, each study
 keep_cols2 <- c(chr_col, bp_col, meta_pval_col)
-tempdata <- data[data[[meta_pval_col]] < 5e-8, ..keep_cols2]
+tempdata <- data[data[[meta_pval_col]] < 5e-8 & ! is.na(data[[study_pval_cols[1]]]), ..keep_cols2]
 gw_sig_loci <- 0
 while (nrow(tempdata) > 0) {
   maxrow <- tempdata[which.min(tempdata[[meta_pval_col]])]
