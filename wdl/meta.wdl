@@ -69,6 +69,7 @@ workflow meta_analysis {
         Array[Array[File]] pdfs = plots.pdfs
         Array[Array[File]] lambdas = plots.lambdas
         Array[Array[File]] qc = plots.qc
+        File gathered_qc = gather_qc.qc
     }
 }
 
