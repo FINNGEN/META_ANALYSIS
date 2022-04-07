@@ -275,7 +275,7 @@ task plots {
 
         mv ~{meta_file} ~{base}
 
-        if [[ "~{loglog_ylim}" =~ "leave_" ]]
+        if [[ "~{pvals_to_plot}" =~ "leave_" ]]
         then
             /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_col ~{af_col} --pheno ~{pheno}
         else
