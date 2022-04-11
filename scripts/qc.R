@@ -58,6 +58,9 @@ region <- round(region * 10^6 / 2, 0)
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
 
+output_prefix <- ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out)
+output_prefix <- paste0(output_prefix, ".qc.", pval_thresh)
+
 studies <- sapply(conf$meta, function(x) x$name)
 
 study_pval_cols <- sapply(conf$meta, function(x) paste(x$name, x$pval, sep = "_"))
@@ -96,9 +99,16 @@ rm(keep_cols2, tempdata)
 qc_dt <- data.table(pheno = pheno, gw_sig_loci = gw_sig_loci)
 
 pass <- data[[study_pval_cols[1]]] < pval_thresh
-while (sum(pass, na.rm = T) < 5) {
-  pval_thresh <- pval_thresh + 1e-8
-  pass <- data[[study_pval_cols[1]]] < pval_thresh
+if (sum(pass, na.rm = T) < 2) {
+  qc_dt[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := NA]
+  qc_dt[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := NA]
+  qc_dt[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := NA]
+  qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta", sep = "_")) := NA]
+  for (i in 2:length(c(study_pval_cols[1], leave_pval_cols[-1]))) {
+    qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta_leave", studies[i], sep = "_")) := NA]
+  }
+  fwrite(qc_dt, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  stop("No SNPs with p-value less than threshold (", pval_thresh, ")")
 }
 
 data <- data[pass]
@@ -109,8 +119,6 @@ qc_dt[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := round(ms$coeffic
 qc_dt[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := round(ms$r.squared, 3)]
 qc_dt[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
 
-output_prefix <- ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out)
-output_prefix <- paste0(output_prefix, "_qc.pval_lt_", pval_thresh)
 pdf(paste0(output_prefix, ".pdf"))
 
 # P-value comparisons scatter plot
