@@ -26,6 +26,7 @@ workflow munge {
         call harmonize {
             input:
             sumstat_file = if clean_filter.is37 then lift_postprocess.lifted_variants else clean_filter.out,
+            extra_opts = if clean_filter.is37 then "--pre_aligned" else "",
             gnomad_ref = sub(gnomad_ref_template, "POP", sumstat_file[1]), n=sumstat_file[2]
         }
         call plot as plot {
@@ -267,7 +268,6 @@ task sumstat_to_vcf {
     }
 }
 
-
 task lift {
 
     File sumstat_vcf
@@ -440,6 +440,8 @@ task harmonize {
     String base = basename(sumstat_file, ".tsv.gz")
     String gnomad_ref_base = basename(gnomad_ref)
 
+    String extra_opts
+
     command <<<
 
         set -eux
@@ -453,7 +455,7 @@ task harmonize {
         mv ${gnomad_ref} ${gnomad_ref_base}
 
         echo "`date` harmonizing stats with gnomAD"
-        python3 /META_ANALYSIS/scripts/harmonize.py ${base} ${gnomad_ref_base} ${n} ${options} \
+        python3 /META_ANALYSIS/scripts/harmonize.py ${base} ${gnomad_ref_base} ${n} ${options} ${extra_opts} \
         | bgzip > ${base}.${gnomad_ref_base}
 
         tabix -s 1 -b 2 -e 2 ${base}.${gnomad_ref_base}
@@ -468,7 +470,7 @@ task harmonize {
 
     runtime {
         docker: "${docker}"
-        cpu: "1"
+        cpu: "2"
         memory: "2 GB"
         disks: "local-disk " + 5*ceil(size(sumstat_file, "G") + size(gnomad_ref, "G")) + " HDD"
         zones: "us-east1-d"
