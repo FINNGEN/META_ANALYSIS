@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson")
+packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson", "stringi")
 
 for (p in packs) {
   if (!require(p, character.only = T)) {
@@ -16,11 +16,11 @@ option_list <- list(
   make_option(c("-m","--method"), type="character", default="inv_var",
               help="meta-analysis method [default=%default]", metavar="character"),
   make_option(c("-l","--loo"), action="store_true", default=FALSE,
-              help="use leave-one-out results [default=%default]"),
+              help="use leave-one-out results"),
   make_option("--conf", type="character", default=NULL,
               help="meta-analysis config json", metavar="character"),
-  make_option("--pval_thresh", type="numeric", default=5e-8,
-              help="p-value threshold used to get SNPs to plot", metavar="numeric"),
+  make_option("--pval_thresh", type="character", default="5e-8, 5e-6",
+              help="comma separated list of p-value thresholds used to filter the data for qc", metavar="numeric"),
   make_option("--region", type="numeric", default=1.0,
               help="region size in megabases used when counting unique loci hits", metavar="numeric"),
   make_option(c("-c","--chr_col"), type="character", default="#CHR",
@@ -31,8 +31,8 @@ option_list <- list(
               help="ref column [default=%default]", metavar="character"),
   make_option(c("-a","--alt_col"), type="character", default="ALT",
               help="alt column [default=%default]", metavar="character"),
-  make_option(c("--af_col"), type="character", default="af_alt",
-              help="af column [default=%default]", metavar="character"),
+  make_option(c("--af_alt_col_suffix"), type="character", default="_af_alt",
+              help="af alt column suffix [default=%default]", metavar="character"),
   make_option(c("--pheno"), type="character", default="pheno",
               help="phenotype name [default=%default]", metavar="character")
 );
@@ -47,19 +47,21 @@ chr_col <- opt$options$chr_col
 bp_col <- opt$options$bp_col
 ref_col <- opt$options$ref_col
 alt_col <- opt$options$alt_col
-af_col <- opt$options$af_col
+af_alt_col_suffix <- opt$options$af_alt_col_suffix
 pheno <- opt$options$pheno
 method <- opt$options$method
-pval_thresh <- opt$options$pval_thresh
+pval_thresh <- sort(unique(as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", opt$options$pval_thresh), ",")))), decreasing = T)
 leave <- opt$options$loo
-region <- opt$options$region
-region <- round(region * 10^6 / 2, 0)
+region <- round(opt$options$region * 10^6 / 2, 0)
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
 
-output_prefix <- ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out)
-output_prefix <- paste0(output_prefix, ".qc.", pval_thresh)
+qc_dt <- data.table(pheno = pheno)
+for (s in conf$meta) {
+  qc_dt[, (paste0(s$name, "_n_cases")) := s$n_cases]
+  qc_dt[, (paste0(s$name, "_n_controls")) := s$n_controls]
+}
 
 studies <- sapply(conf$meta, function(x) x$name)
 
@@ -71,134 +73,191 @@ meta_beta_col <- paste("all", method, "meta_beta", sep = "_")
 
 het_p_col <- paste("all", method, "het_p", sep = "_")
 
-keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_col, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
+af_cols <- paste0(studies, af_alt_col_suffix)
+
+pval_cols <- c(study_pval_cols, meta_pval_col)
+
+keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
 
 if (leave) {
   leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
   leave_beta_cols <- paste("leave", studies, method, "meta_beta", sep = "_")
   #leave_het_p_cols <- paste("leave", studies, method, "meta_het_p", sep = "_")
   keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols)
+  pval_cols <- c(pval_cols, leave_pval_cols)
 }
 
+message(paste("Reading file", file, "..."))
 data <- fread(file, header = T, select = keep_cols)
 
-# Get gw signif hits, 1MB regions, each study
-keep_cols2 <- c(chr_col, bp_col, meta_pval_col)
-tempdata <- data[data[[meta_pval_col]] < 5e-8 & ! is.na(data[[study_pval_cols[1]]]), ..keep_cols2]
-gw_sig_loci <- 0
-while (nrow(tempdata) > 0) {
-  maxrow <- tempdata[which.min(tempdata[[meta_pval_col]])]
-  maxrow_u_bp <- maxrow[[bp_col]] + region
-  maxrow_l_bp <- maxrow[[bp_col]] - region
-  maxrow_chr <- maxrow[[chr_col]]
-  in_region <- tempdata[[chr_col]] == maxrow_chr & tempdata[[bp_col]] >= maxrow_l_bp & tempdata[[bp_col]] <= maxrow_u_bp
-  tempdata <- tempdata[! in_region]
-  gw_sig_loci <- gw_sig_loci + 1
-}
-rm(keep_cols2, tempdata)
-qc_dt <- data.table(pheno = pheno, gw_sig_loci = gw_sig_loci)
-
-pass <- data[[study_pval_cols[1]]] < pval_thresh
-if (sum(pass, na.rm = T) < 2) {
-  qc_dt[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := NA]
-  qc_dt[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := NA]
-  qc_dt[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := NA]
-  qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta", sep = "_")) := NA]
-  for (i in 2:length(c(study_pval_cols[1], leave_pval_cols[-1]))) {
-    qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta_leave", studies[i], sep = "_")) := NA]
+for (pval_thresh_i in pval_thresh) {
+  
+  message(paste("Calculating qc metrics with p-value threshold", pval_thresh_i, "..."))
+  
+  output_prefix <- paste0(ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out), ".qc.", pval_thresh_i)
+  
+  qc_dt_i <- copy(qc_dt)
+  
+  pass <- apply(data[, ..pval_cols], 1, function(x) any(x < pval_thresh_i, na.rm = T)) & ! is.na(data[[study_pval_cols[[1]]]])
+  DATA <- data[pass]
+  
+  # Get gw signif hits
+  sig_loc_list <- list()
+  for (pval_col in pval_cols) {
+    tempdata <- DATA[DATA[[pval_col]] < pval_thresh_i]
+    sig_loci <- 0
+    while (nrow(tempdata) > 0) {
+      maxrow <- tempdata[which.min(tempdata[[pval_col]])]
+      if (is.null(sig_loc_list[[pval_col]])) {
+        sig_loc_list[[pval_col]] <- maxrow
+      } else {
+        sig_loc_list[[pval_col]] <- rbind(sig_loc_list[[pval_col]], maxrow)
+      }
+      maxrow_u_bp <- maxrow[[bp_col]] + region
+      maxrow_l_bp <- maxrow[[bp_col]] - region
+      maxrow_chr <- maxrow[[chr_col]]
+      in_region <- tempdata[[chr_col]] == maxrow_chr & tempdata[[bp_col]] >= maxrow_l_bp & tempdata[[bp_col]] <= maxrow_u_bp
+      tempdata <- tempdata[! in_region]
+      sig_loci <- sig_loci + 1
+    }
+    qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := sig_loci]
   }
-  fwrite(qc_dt, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
-  stop("No SNPs with p-value less than threshold (", pval_thresh, ")")
-}
-
-data <- data[pass]
-
-m <- lm(as.formula(paste(study_beta_cols[1], "~", meta_beta_col)), data = data)
-ms <- summary(m)
-qc_dt[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := round(ms$coefficients[2,1], 3)]
-qc_dt[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := round(ms$r.squared, 3)]
-qc_dt[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
-
-pdf(paste0(output_prefix, ".pdf"))
-
-# P-value comparisons scatter plot
-for (i in 2:length(study_pval_cols)) {
-  tempcols <- study_pval_cols[c(1,i)]
-  tempdata <- na.omit(cbind(-log10(data[, ..tempcols]), data[, ..af_col]))
-  tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(1, 0.05, 0.01, 0))
-  p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2], color = af_col)) +
-    geom_point() +
-    #geom_smooth(method = "lm", se = F) +
-    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-    expand_limits(x = 0, y = 0) +
-    xlab(paste0(studies[1], "_mlogp")) +
-    ylab(paste0(studies[i], "_mlogp")) +
-    scale_color_manual(labels = levels(tempdata[[af_col]]), values = c("#F8766D", "#00BA38", "#619CFF"), drop = F) +
-    theme_bw()
-  plot(p)
-}
-
-# Effect size comparisons scatter plot
-for (i in 2:length(study_beta_cols)) {
-  tempcols <- c(study_beta_cols[c(1,i)], af_col)
-  tempdata <- na.omit(data[, ..tempcols])
-  tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(1, 0.05, 0.01, 0))
-  p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2], color = af_col)) +
-    geom_point() +
-    #geom_smooth(method = "lm", se = F) +
-    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-    #expand_limits(x = 0, y = 0) +
-    #xlab(paste0("abs(", studies[1], "_beta)")) +
-    #ylab(paste0("abs(", studies[i], "_beta)")) +
-    xlab(paste0(studies[1], "_beta")) +
-    ylab(paste0(studies[i], "_beta")) +
-    scale_color_manual(labels = levels(tempdata[[af_col]]), values = c("#F8766D", "#00BA38", "#619CFF"), drop = F) +
-    theme_bw()
-  plot(p)
-}
-
-# Het p histogram
-tempdata <- -log10(na.omit(data[, ..het_p_col]))
-p <- ggplot(tempdata, aes_string(x = het_p_col)) +
-  geom_histogram() +
-  xlab(paste("all", method, "het_mlogp", sep = "_")) +
-  ggtitle("Heterogeneity -log10(p-value) distribution") +
-  theme_bw()
-plot(p)
-
-# P-value comparison histogram
-pval_cols <- c(meta_pval_col, study_pval_cols[1])
-tempdata <- -log10(na.omit(data[, ..pval_cols]))
-diff <- data.table(tempdata[[1]] - tempdata[[2]])
-p <- ggplot(diff, aes(x = V1)) + 
-  geom_histogram(binwidth = .5) +
-  xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-  ggtitle(paste("Is", studies[1], "p-value getting stronger in meta-analysis (all studies)")) +
-  geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
-  theme_bw()
-plot(p)
-
-qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta", sep = "_")) := round(sum(diff > 0) / length(diff[[1]]), 3)]
-
-
-# Leave-one-out qc
-if (leave) {
-  pval_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
-  tempdata <- -log10(data[, ..pval_cols])
-  for (i in 2:length(pval_cols)) {
-    diff <- na.omit(data.table(tempdata[[i]] - tempdata[[1]]))
-    p <- ggplot(diff, aes(x = V1)) +
-      geom_histogram(binwidth = .5) +
-      xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-      ggtitle(paste0("Is ", studies[1], " p-value getting stronger in meta-analysis (drop ", studies[i], ")")) +
-      geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+  rm(tempdata)
+  
+  pass <- DATA[[study_pval_cols[1]]] < pval_thresh_i
+  if (sum(pass, na.rm = T) < 2) {
+    qc_dt_i[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := NA]
+    qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := NA]
+    qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := NA]
+    for (pval_col in c(meta_pval_col, leave_pval_cols)) {
+      qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := NA]
+    }
+    fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+    next
+  }
+  
+  DATA <- DATA[pass]
+  
+  for (beta_col in c(study_beta_cols[-1], meta_beta_col)) {
+    m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = DATA)
+    ms <- summary(m)
+    qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
+    qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := round(ms$r.squared, 3)]
+    qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+  }
+  
+  m <- lm(as.formula(paste(study_beta_cols[1], "~", meta_beta_col)), data = DATA)
+  ms <- summary(m)
+  qc_dt_i[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := round(ms$coefficients[2,1], 3)]
+  qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := round(ms$r.squared, 3)]
+  qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+  
+  ref_hits <- sig_loc_list[[pval_cols[1]]]
+  for (pval_col in c(meta_pval_col, leave_pval_cols)) {
+    qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := round(sum(ref_hits[[pval_cols[1]]] > ref_hits[[pval_col]], na.rm = T) / nrow(ref_hits), 3)]
+  }
+  
+  ref_hits[, het_p_fdr := p.adjust(ref_hits[[het_p_col]], method = "fdr")]
+  qc_dt_i[, het_p_fdr_signif_in_meta_pct := round(sum(ref_hits[["het_p_fdr"]] < 0.05, na.rm = T) / nrow(ref_hits), 3)]
+  
+  fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t")
+  
+  # Change afs to mafs
+  for(af_col in af_cols) {
+    af <- DATA[[af_col]]
+    af[af > 0.5 & ! is.na(af)] <- 1 - af[af > 0.5 & ! is.na(af)]
+    DATA[, (af_col) := af]
+  }
+  rm(af)
+  
+  pdf(paste0(output_prefix, ".pdf"))
+  
+  # P-value comparisons scatter plot
+  for (i in 2:length(study_pval_cols)) {
+    tempcols <- study_pval_cols[c(1,i)]
+    af_col <- af_cols[i]
+    tempdata <- na.omit(cbind(-log10(DATA[, ..tempcols]), DATA[, ..af_col]))
+    tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(0.5, 0.2, 0.05, 0.01, 0))
+    color_vector <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0")
+    names(color_vector) <- levels(tempdata[[af_col]])
+    p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2], color = af_col)) +
+      geom_point() +
+      #geom_smooth(method = "lm", se = F) +
+      geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
+      expand_limits(x = 0, y = 0) +
+      xlab(paste0(studies[1], "_mlogp")) +
+      ylab(paste0(studies[i], "_mlogp")) +
+      scale_color_manual(labels = names(color_vector), values = color_vector, drop = F) +
       theme_bw()
-    plot(p)
     
-    qc_dt[, (paste("pct_pval_stronger_in", studies[1], "vs_meta_leave", studies[i], sep = "_")) := round(sum(diff > 0) / length(diff[[1]]), 3)]
+    min_limit <- min(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[1], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[1])
+    max_limit <- max(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[2], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[2])
+    p <- p + xlim(min_limit, max_limit) + ylim(min_limit, max_limit)
+    
+    plot(p)
   }
+  
+  # Effect size comparisons scatter plot
+  for (i in 2:length(study_beta_cols)) {
+    af_col <- af_cols[i]
+    tempcols <- c(study_beta_cols[c(1,i)], af_col)
+    tempdata <- na.omit(DATA[, ..tempcols])
+    tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(0.5, 0.2, 0.05, 0.01, 0))
+    color_vector <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0")
+    names(color_vector) <- levels(tempdata[[af_col]])
+    p <- ggplot(tempdata, aes_string(x = tempcols[1], y = tempcols[2], color = af_col)) +
+      geom_point() +
+      stat_smooth(method = "lm", se = F, formula = "y ~ x + 0", fullrange = T, size = .8) +
+      geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
+      xlab(paste0(studies[1], "_beta")) +
+      ylab(paste0(studies[i], "_beta")) +
+      scale_color_manual(labels = names(color_vector), values = color_vector, drop = F) +
+      theme_bw()
+    
+    min_limit <- min(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[1], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[1])
+    max_limit <- max(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[2], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[2])
+    p <- p + xlim(min_limit, max_limit) + ylim(min_limit, max_limit)
+    
+    plot(p)
+  }
+  
+  # Het p histogram
+  tempdata <- -log10(na.omit(DATA[, ..het_p_col]))
+  p <- ggplot(tempdata, aes_string(x = het_p_col)) +
+    geom_histogram() +
+    xlab(paste("all", method, "het_mlogp", sep = "_")) +
+    ggtitle("Heterogeneity -log10(p-value) distribution") +
+    theme_bw()
+  plot(p)
+  
+  # P-value comparison histogram
+  p_cols <- c(meta_pval_col, study_pval_cols[1])
+  tempdata <- -log10(na.omit(DATA[, ..p_cols]))
+  diff <- data.table(tempdata[[1]] - tempdata[[2]])
+  p <- ggplot(diff, aes(x = V1)) + 
+    geom_histogram(binwidth = .5) +
+    xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
+    ggtitle(paste("Is", studies[1], "p-value getting stronger in meta-analysis (all studies)")) +
+    geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+    theme_bw()
+  plot(p)
+  
+  # Leave-one-out qc
+  if (leave) {
+    p_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
+    tempdata <- -log10(DATA[, ..p_cols])
+    for (i in 2:length(p_cols)) {
+      diff <- na.omit(data.table(tempdata[[i]] - tempdata[[1]]))
+      p <- ggplot(diff, aes(x = V1)) +
+        geom_histogram(binwidth = .5) +
+        xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
+        ggtitle(paste0("Is ", studies[1], " p-value getting stronger in meta-analysis (drop ", studies[i], ")")) +
+        geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+        theme_bw()
+      plot(p)
+    }
+  }
+  
+  graphics.off()
+  
 }
-
-graphics.off()
-
-fwrite(qc_dt, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t")
