@@ -1,11 +1,11 @@
 {
     "meta_analysis.sumstats_loc": "gs://juham-fg/meta-analysis/E4_HYTHY_AI_STRICT_sumstat_files.txt",
     "meta_analysis.pheno_confs": "gs://juham-fg/meta-analysis/E4_HYTHY_AI_STRICT_conf_json.txt",
-    "meta_analysis.docker": "eu.gcr.io/finngen-refinery-dev/meta:00275d7",
+    "meta_analysis.docker": "eu.gcr.io/finngen-refinery-dev/meta:08d615b",
     "meta_analysis.run_range.method": "inv_var",
     "meta_analysis.run_range.opts": "--is_het_test --leave_one_out",
     "meta_analysis.add_rsids.ref_file": "gs://autoreporting_resources/dbsnp_vcf/dbsnp_hg38p13_b153_numerical.vcf.gz",
     "meta_analysis.plots.pvals_to_plot": "all_inv_var_meta_p,all_inv_var_het_p,leave_FINNGEN_inv_var_meta_p,leave_UKBB_inv_var_meta_p,leave_ESTBB_inv_var_meta_p",
-    "meta_analysis.plots.af_col": "FINNGEN_af_alt",
+    "meta_analysis.plots.af_col_suffix": "_af_alt",
     "meta_analysis.plots.loglog_ylim": 20
 }

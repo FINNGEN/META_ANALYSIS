@@ -271,15 +271,15 @@ task plots {
 
     command <<<
 
-        set -euxo pipefail
+        set -ux
 
         mv ~{meta_file} ~{base}
 
         if [[ "~{pvals_to_plot}" =~ "leave_" ]]
         then
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_col ~{af_col} --pheno ~{pheno}
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_alt_col_suffix ~{af_col_suffix} --pheno ~{pheno}
         else
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_col ~{af_col} --pheno ~{pheno}
+            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_alt_col_suffix ~{af_col_suffix} --pheno ~{pheno}
         fi
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}
