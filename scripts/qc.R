@@ -125,42 +125,54 @@ for (pval_thresh_i in pval_thresh) {
   rm(tempdata)
   
   pass <- DATA[[study_pval_cols[1]]] < pval_thresh_i
-  if (sum(pass, na.rm = T) < 2) {
-    qc_dt_i[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := NA]
-    qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := NA]
-    qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := NA]
-    for (pval_col in c(meta_pval_col, leave_pval_cols)) {
-      qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := NA]
-    }
-    fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
-    next
-  }
-  
   DATA <- DATA[pass]
   
   for (beta_col in c(study_beta_cols[-1], meta_beta_col)) {
-    m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = DATA)
-    ms <- summary(m)
-    qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
-    qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := round(ms$r.squared, 3)]
-    qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+    tryCatch(
+      expr = {
+        m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = DATA)
+        ms <- summary(m)
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := round(ms$r.squared, 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+      },
+      error = function(e) {
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := NA]
+      }
+    )
   }
-  
-  m <- lm(as.formula(paste(study_beta_cols[1], "~", meta_beta_col)), data = DATA)
-  ms <- summary(m)
-  qc_dt_i[, (paste(studies[1], "vs_meta_beta_slope", sep = "_")) := round(ms$coefficients[2,1], 3)]
-  qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2", sep = "_")) := round(ms$r.squared, 3)]
-  qc_dt_i[, (paste(studies[1], "vs_meta_beta_r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
   
   ref_hits <- sig_loc_list[[pval_cols[1]]]
   for (pval_col in c(meta_pval_col, leave_pval_cols)) {
-    qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := round(sum(ref_hits[[pval_cols[1]]] > ref_hits[[pval_col]], na.rm = T) / nrow(ref_hits), 3)]
+    tryCatch(
+      expr = {
+        qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := round(sum(ref_hits[[pval_cols[1]]] > ref_hits[[pval_col]], na.rm = T) / nrow(ref_hits), 3)]
+      },
+      error = function(e) {
+        qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := NA]
+      }
+    )
   }
   
-  ref_hits[, het_p_fdr := p.adjust(ref_hits[[het_p_col]], method = "fdr")]
-  qc_dt_i[, het_p_fdr_signif_in_meta_pct := round(sum(ref_hits[["het_p_fdr"]] < 0.05, na.rm = T) / nrow(ref_hits), 3)]
+  tryCatch(
+    expr = {
+      ref_hits[, het_p_fdr := p.adjust(ref_hits[[het_p_col]], method = "fdr")]
+      qc_dt_i[, het_p_fdr_signif_in_meta_pct := round(sum(ref_hits[["het_p_fdr"]] < 0.05, na.rm = T) / nrow(ref_hits), 3)]
+    },
+    error = function(e) {
+      qc_dt_i[, het_p_fdr_signif_in_meta_pct := NA]
+    }
+  )
   
-  fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t")
+  fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  
+  # Don't try plotting if less than two significant SNPs
+  if (nrow(DATA) < 2) {
+    message(paste("Skipping plotting due to less than 2 significant variants."))
+    next
+  }
   
   # Change afs to mafs
   for(af_col in af_cols) {
