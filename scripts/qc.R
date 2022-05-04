@@ -3,7 +3,7 @@
 packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson", "stringi")
 
 for (p in packs) {
-  if (!require(p, character.only = T)) {
+  if (suppressPackageStartupMessages(!require(p, character.only = T))) {
     install.packages(p,  repos = c(CRAN = "http://cran.r-project.org"))
   }
 }
