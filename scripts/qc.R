@@ -214,7 +214,13 @@ for (pval_thresh_i in pval_thresh) {
     af_col <- af_cols[i]
     tempcols <- c(study_beta_cols[c(1,i)], af_col)
     tempdata <- na.omit(DATA[, ..tempcols])
-    tempdata[[tempcols[1]]] <- abs(tempdata[[tempcols[1]]])
+    neg_betas <- tempdata[[tempcols[1]]] < 0
+    new_beta1 <- tempdata[[tempcols[1]]]
+    new_beta1[neg_betas] <- -new_beta1[neg_betas]
+    new_beta2 <- tempdata[[tempcols[2]]]
+    new_beta2[neg_betas] <- -new_beta2[neg_betas]
+    tempdata[, (tempcols[1]) := new_beta1]
+    tempdata[, (tempcols[2]) := new_beta2]
     tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(0.5, 0.2, 0.05, 0.01, 0))
     color_vector <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0")
     names(color_vector) <- levels(tempdata[[af_col]])
