@@ -76,6 +76,7 @@ het_p_col <- paste("all", method, "het_p", sep = "_")
 af_cols <- paste0(studies, af_alt_col_suffix)
 
 pval_cols <- c(study_pval_cols, meta_pval_col)
+meta_pval_cols <- meta_pval_col
 
 keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
 
@@ -85,6 +86,7 @@ if (leave) {
   #leave_het_p_cols <- paste("leave", studies, method, "meta_het_p", sep = "_")
   keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols)
   pval_cols <- c(pval_cols, leave_pval_cols)
+  meta_pval_cols <- c(meta_pval_cols, leave_pval_cols)
 }
 
 message(paste("Reading file", file, "..."))
@@ -145,7 +147,7 @@ for (pval_thresh_i in pval_thresh) {
   }
   
   ref_hits <- sig_loc_list[[pval_cols[1]]]
-  for (pval_col in c(meta_pval_col, leave_pval_cols)) {
+  for (pval_col in meta_pval_cols) {
     tryCatch(
       expr = {
         qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := round(sum(ref_hits[[pval_cols[1]]] > ref_hits[[pval_col]], na.rm = T) / nrow(ref_hits), 3)]
