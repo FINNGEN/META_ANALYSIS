@@ -69,7 +69,7 @@ workflow meta_analysis {
         Array[Array[File]] pdfs = plots.pdfs
         Array[Array[File]] lambdas = plots.lambdas
         Array[Array[File]] qc = plots.qc
-        File gathered_qc = gather_qc.qc
+        Array[File] gathered_qc = gather_qc.qcs
     }
 }
 
@@ -263,26 +263,33 @@ task plots {
         String docker
 
         Int loglog_ylim
+        String pval_thresholds
         String pvals_to_plot
-        String af_col
+        String af_col_suffix
 
         String base = basename(meta_file)
     }
 
     command <<<
 
-        set -ux
+        set -euxo pipefail
 
         mv ~{meta_file} ~{base}
 
-        if [[ "~{pvals_to_plot}" =~ "leave_" ]]
-        then
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --loo --af_alt_col_suffix ~{af_col_suffix} --pheno ~{pheno}
-        else
-            /META_ANALYSIS/scripts/qc.R --file ~{base} --conf ~{conf} --af_alt_col_suffix ~{af_col_suffix} --pheno ~{pheno}
-        fi
+        [[ "~{pvals_to_plot}" =~ "leave_" ]] && loo="--loo" || loo=""
 
-        /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}
+        /META_ANALYSIS/scripts/qc.R --file ~{base} \
+        --conf ~{conf} \
+        --af_alt_col_suffix ~{af_col_suffix} \
+        --pheno ~{pheno} \
+        --pval_thresh ~{pval_thresholds} \
+        $loo
+
+        /META_ANALYSIS/scripts/qqplot.R --file ~{base} \
+        --bp_col "POS" \
+        --chrcol "#CHR" \
+        --pval_col ~{pvals_to_plot} \
+        --loglog_ylim ~{loglog_ylim}
 
     >>>
 
@@ -295,9 +302,9 @@ task plots {
 
     runtime {
         docker: "~{docker}"
-        cpu: "1"
-        memory: "20 GB"
-        disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
+        cpu: "2"
+        memory: "32 GB"
+        disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
@@ -355,16 +362,33 @@ task gather_qc {
 
     command <<<
 
-        cat <(head -1 ~{qcs[0]}) \
-            <(for file in ~{sep=" " qcs}; do
-                tail -n +2 $file;
-            done) \
-        > qc.tsv
+        Rscript - <<EOF
+
+        suppressPackageStartupMessages(library(data.table))
+
+        files <- strsplit(x = "~{sep=" " qcs}", split = " ")[[1]]
+        files_list <- split(files, gsub(".*[.]tsv[.]gz[.]qc[.]|[.]tsv", "", files))
+
+        merged_list <- lapply(files_list, function(x) {
+            do.call(rbind, lapply(x, fread))
+        })
+
+        for(i in names(merged_list)) {
+            fwrite(x = merged_list[[i]],
+                    file = paste0("qc.", i, ".tsv"),
+                    sep = "\t",
+                    quote = F,
+                    col.names = T,
+                    row.names = F,
+                    na = "NA")
+        }
+
+        EOF
 
     >>>
 
     output {
-        File qc = "qc.tsv"
+        Array[File] qcs = glob("qc.*.tsv")
     }
     
     runtime {
