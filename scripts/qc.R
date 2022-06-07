@@ -89,12 +89,12 @@ if (leave) {
   meta_pval_cols <- c(meta_pval_cols, leave_pval_cols)
 }
 
-message(paste("Reading file", file, "..."))
+message("Reading file ", file, " ...")
 data <- fread(file, header = T, select = keep_cols)
 
 for (pval_thresh_i in pval_thresh) {
   
-  message(paste("Calculating qc metrics with p-value threshold", pval_thresh_i, "..."))
+  message("Calculating qc metrics with p-value threshold ", pval_thresh_i, " ...")
   
   output_prefix <- paste0(ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out), ".qc.", pval_thresh_i)
   
@@ -107,22 +107,35 @@ for (pval_thresh_i in pval_thresh) {
   sig_loc_list <- list()
   for (pval_col in pval_cols) {
     tempdata <- DATA[DATA[[pval_col]] < pval_thresh_i]
-    sig_loci <- 0
+    n_sig_loci <- 0
+    message("Finding significant loci according to \"", pval_col, "\"")
     while (nrow(tempdata) > 0) {
       maxrow <- tempdata[which.min(tempdata[[pval_col]])]
+      maxrow_u_bp <- maxrow[[bp_col]] + region
+      maxrow_l_bp <- maxrow[[bp_col]] - region
+      maxrow_chr <- maxrow[[chr_col]]
+      in_region <- tempdata[[chr_col]] == maxrow_chr & tempdata[[bp_col]] >= maxrow_l_bp & tempdata[[bp_col]] <= maxrow_u_bp
+      if (anyNA(maxrow[, ..study_pval_cols])) {
+        warning("Top hit in a region is not found from all of the studies: ",
+                paste(maxrow[, 1:4], collapse = "-"))
+        temp_sig_loci <- na.omit(tempdata[in_region])
+        if (nrow(temp_sig_loci) > 0) {
+          maxrow <- temp_sig_loci[which.min(temp_sig_loci[[pval_col]])]
+          warning("Replaced top hit in region with the next best SNP found in all studies: ",
+                  paste(maxrow[, 1:4], collapse = "-"))
+        } else {
+          warning("Could not find better replacement for the top hit in the region. This may effect the heterogeneity calculations. Number of significant SNPs in region: ", nrow(temp_sig_loci))
+        }
+      }
+      tempdata <- tempdata[! in_region]
+      n_sig_loci <- n_sig_loci + 1
       if (is.null(sig_loc_list[[pval_col]])) {
         sig_loc_list[[pval_col]] <- maxrow
       } else {
         sig_loc_list[[pval_col]] <- rbind(sig_loc_list[[pval_col]], maxrow)
       }
-      maxrow_u_bp <- maxrow[[bp_col]] + region
-      maxrow_l_bp <- maxrow[[bp_col]] - region
-      maxrow_chr <- maxrow[[chr_col]]
-      in_region <- tempdata[[chr_col]] == maxrow_chr & tempdata[[bp_col]] >= maxrow_l_bp & tempdata[[bp_col]] <= maxrow_u_bp
-      tempdata <- tempdata[! in_region]
-      sig_loci <- sig_loci + 1
     }
-    qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := sig_loci]
+    qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := n_sig_loci]
   }
   rm(tempdata)
   
@@ -161,7 +174,7 @@ for (pval_thresh_i in pval_thresh) {
   tryCatch(
     expr = {
       ref_hits[, het_p_fdr := p.adjust(ref_hits[[het_p_col]], method = "fdr")]
-      qc_dt_i[, het_p_fdr_signif_in_meta_pct := round(sum(ref_hits[["het_p_fdr"]] < 0.05, na.rm = T) / nrow(ref_hits), 3)]
+      qc_dt_i[, het_p_fdr_signif_in_meta_pct := round(sum(ref_hits[["het_p_fdr"]] < 0.05, na.rm = T) / sum(!is.na(ref_hits[["het_p_fdr"]])), 3)]
     },
     error = function(e) {
       qc_dt_i[, het_p_fdr_signif_in_meta_pct := NA]
@@ -172,7 +185,7 @@ for (pval_thresh_i in pval_thresh) {
   
   # Don't try plotting if less than two significant SNPs
   if (nrow(DATA) < 2) {
-    message(paste("Skipping plotting due to less than 2 significant variants."))
+    message("Skipping plotting due to less than 2 significant variants.")
     next
   }
   
