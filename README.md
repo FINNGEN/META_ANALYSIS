@@ -4,8 +4,7 @@ Tools for doing x way meta-analysis
 
 ## Variant matching across studies
 
-Variants are matched using chr pos ref and alt. For this reason all 37 build results need to first be lifted over to 38.
-[lift.wdl](wdl/lift.wdl) can be used to liftover results first if needed.
+Variants are matched using chr pos ref and alt. For this reason all 37 build results need to first be lifted over to 38 to match FinnGen. [lift.wdl](wdl/lift.wdl) can be used to liftover results first if needed.
 
 IMPORTANT: Studies need to be ordered by chr (1-22, x,y,mt) and position. Chromosome can be indicated with numbers 1-25 or 1-22, X, Y, MT, with or without 'chr' prefix and they will be internally coded to numerical values.
 
@@ -15,7 +14,7 @@ Workflow for data munging (liftover, harmonization with GnomAD, general QC) can 
 
 ## Running single trait meta-analysis
 
-[meta_analysis.py](scripts/meta_analysis.py) is the main script for running meta-analysis for a single trait. Meta-analyses to be performed are specified with json configuration file. Example configuration in (data/conf.json). Script will try to align using both strands as well as by flipping ref vs. alt.
+[meta_analysis.py](scripts/meta_analysis.py) is the main script for running meta-analysis for a single trait. Meta-analyses to be performed are specified with json configuration file. Example configuration with three studies in (data/conf.json). Script will try to align using both strands as well as by flipping ref vs. alt.
 
 ```bash
 usage: meta_analysis.py [-h] [--not_quiet] [--leave_one_out] [--is_het_test]
@@ -43,21 +42,21 @@ optional arguments:
   --flip_indels         Try variant aligning by flipping indels also. By default indels are not flipped
 ```
 
-The configuration file should be a json file with these elements:
+The configuration file should be a json file with two or more studies with these elements in each:
 
 ```json
             "name":"FINNGEN",
             "file":"/Users/mitja/projects/finngen/META_ANALYSIS/I9_AF.gz",
             "n_cases": 6570 , # number of cases. Used only if sample size weighted meta-analysis is used
             "n_controls": 48378, # number of controls. Used only if sample size weighted meta-analysis is used
-            "chr":"CHR", #chromosome column name in the file
-            "pos":"POS", #position column name in the file
-            "ref":"Allele1", #reference allele column name in the file
-            "alt":"Allele2", #alternate allele column name in the file
-            "effect":"BETA", #effect size column name in the file
-            "effect_type":"beta", #is the effect column beta or or. In case of OR the value will be log transformed to beta.
+            "chr":"CHR", # chromosome column name in the file
+            "pos":"POS", # position column name in the file
+            "ref":"Allele1", # reference allele column name in the file
+            "alt":"Allele2", # alternate allele column name in the file
+            "effect":"BETA", # effect size column name in the file
+            "effect_type":"beta", # effect type. Allowed values: beta, OR. In case of OR the value will be log transformed to beta.
             "pval":"p.value" # effect size column name in the file
-            "se":"SE" <- this parameter is optional. If given for compared studies additional p-value will be added using this as a weight for z-score.
+            "se":"SE" # effect standard error. This column is optional if not using inv_var method. Otherwise additional p-value will be added using this as a weight for z-score.
 ```
 
 [meta_analysis.py](scripts/meta_analysis.py) supports 3 different meta-analysis methods
@@ -66,4 +65,4 @@ The configuration file should be a json file with these elements:
 * `variance`: weight z-score from p-value by variance,
 * `inv_var`: regular inverse variance weighted betas meta-analysis.
 
-`inv_var` is recommeneded if betas and variances are comparable. In case of combining data from different models (e.g.) linear vs. logistic you should use sample size weighted meta.
+`inv_var` is recommended if betas and variances are comparable. In case of combining data from different models (e.g.) linear vs. logistic you should use sample size weighted meta.
