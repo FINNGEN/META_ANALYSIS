@@ -116,15 +116,19 @@ for (pval_thresh_i in pval_thresh) {
       maxrow_chr <- maxrow[[chr_col]]
       in_region <- tempdata[[chr_col]] == maxrow_chr & tempdata[[bp_col]] >= maxrow_l_bp & tempdata[[bp_col]] <= maxrow_u_bp
       if (anyNA(maxrow[, ..study_pval_cols])) {
-        warning("Top hit in a region is not found from all of the studies: ",
+        message("Top hit in a region is not found from all of the studies: ",
                 paste(maxrow[, 1:4], collapse = "-"))
-        temp_sig_loci <- na.omit(tempdata[in_region])
-        if (nrow(temp_sig_loci) > 0) {
-          maxrow <- temp_sig_loci[which.min(temp_sig_loci[[pval_col]])]
-          warning("Replaced top hit in region with the next best SNP found in all studies: ",
+        #temp_sig_loci <- na.omit(tempdata[in_region])
+        temp_sig_loci <- tempdata[in_region]
+        tempdt <- data.table(N = apply(is.na(temp_sig_loci[, ..study_pval_cols]), 1, sum),
+                             pval = temp_sig_loci[[pval_col]])
+        temp_sig_loci <- temp_sig_loci[order(tempdt$N, tempdt$pval)]
+        if (! equals(temp_sig_loci[1,], maxrow)) {
+          maxrow <- temp_sig_loci[1,]
+          message("Replaced top hit in region with the next best SNP found in more studies: ",
                   paste(maxrow[, 1:4], collapse = "-"))
         } else {
-          warning("Could not find better replacement for the top hit in the region. This may effect the heterogeneity calculations. Number of significant SNPs in region: ", nrow(temp_sig_loci))
+          message("Could not find better replacement for the top hit in the region. This may effect the heterogeneity calculations. Number of significant SNPs in region: ", nrow(temp_sig_loci))
         }
       }
       tempdata <- tempdata[! in_region]
@@ -139,13 +143,15 @@ for (pval_thresh_i in pval_thresh) {
   }
   rm(tempdata)
   
-  pass <- DATA[[study_pval_cols[1]]] < pval_thresh_i
-  DATA <- DATA[pass]
+  #pass <- DATA[[study_pval_cols[1]]] < pval_thresh_i
+  #DATA <- DATA[pass]
+  
+  ref_hits <- sig_loc_list[[pval_cols[1]]]
   
   for (beta_col in c(study_beta_cols[-1], meta_beta_col)) {
     tryCatch(
       expr = {
-        m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = DATA)
+        m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = ref_hits)
         ms <- summary(m)
         qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
         qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := round(ms$r.squared, 3)]
@@ -159,7 +165,6 @@ for (pval_thresh_i in pval_thresh) {
     )
   }
   
-  ref_hits <- sig_loc_list[[pval_cols[1]]]
   for (pval_col in meta_pval_cols) {
     tryCatch(
       expr = {
@@ -184,16 +189,20 @@ for (pval_thresh_i in pval_thresh) {
   fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
   
   # Don't try plotting if less than two significant SNPs
-  if (nrow(DATA) < 2) {
-    message("Skipping plotting due to less than 2 significant variants.")
+  if (is.null(ref_hits)) {
+    message("Skipping plotting due to no significant hits.")
+    next
+  }
+  if (nrow(ref_hits) < 2) {
+    message("Skipping plotting due to less than 2 significant hits.")
     next
   }
   
   # Change afs to mafs
   for(af_col in af_cols) {
-    af <- DATA[[af_col]]
+    af <- ref_hits[[af_col]]
     af[af > 0.5 & ! is.na(af)] <- 1 - af[af > 0.5 & ! is.na(af)]
-    DATA[, (af_col) := af]
+    ref_hits[, (af_col) := af]
   }
   rm(af)
   
@@ -203,7 +212,7 @@ for (pval_thresh_i in pval_thresh) {
   for (i in 2:length(study_pval_cols)) {
     tempcols <- study_pval_cols[c(1,i)]
     af_col <- af_cols[i]
-    tempdata <- na.omit(cbind(-log10(DATA[, ..tempcols]), DATA[, ..af_col]))
+    tempdata <- na.omit(cbind(-log10(ref_hits[, ..tempcols]), ref_hits[, ..af_col]))
     tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(0.5, 0.2, 0.05, 0.01, 0))
     color_vector <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0")
     names(color_vector) <- levels(tempdata[[af_col]])
@@ -228,7 +237,7 @@ for (pval_thresh_i in pval_thresh) {
   for (i in 2:length(study_beta_cols)) {
     af_col <- af_cols[i]
     tempcols <- c(study_beta_cols[c(1,i)], af_col)
-    tempdata <- na.omit(DATA[, ..tempcols])
+    tempdata <- na.omit(ref_hits[, ..tempcols])
     neg_betas <- tempdata[[tempcols[1]]] < 0
     new_beta1 <- tempdata[[tempcols[1]]]
     new_beta1[neg_betas] <- -new_beta1[neg_betas]
@@ -256,7 +265,7 @@ for (pval_thresh_i in pval_thresh) {
   }
   
   # Het p histogram
-  tempdata <- -log10(na.omit(DATA[, ..het_p_col]))
+  tempdata <- -log10(na.omit(ref_hits[, ..het_p_col]))
   p <- ggplot(tempdata, aes_string(x = het_p_col)) +
     geom_histogram() +
     xlab(paste("all", method, "het_mlogp", sep = "_")) +
@@ -266,10 +275,10 @@ for (pval_thresh_i in pval_thresh) {
   
   # P-value comparison histogram
   p_cols <- c(meta_pval_col, study_pval_cols[1])
-  tempdata <- -log10(na.omit(DATA[, ..p_cols]))
+  tempdata <- -log10(na.omit(ref_hits[, ..p_cols]))
   diff <- data.table(tempdata[[1]] - tempdata[[2]])
   p <- ggplot(diff, aes(x = V1)) + 
-    geom_histogram(binwidth = .5) +
+    geom_histogram() +
     xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
     ggtitle(paste("Is", studies[1], "p-value getting stronger in meta-analysis (all studies)")) +
     geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
@@ -279,11 +288,11 @@ for (pval_thresh_i in pval_thresh) {
   # Leave-one-out qc
   if (leave) {
     p_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
-    tempdata <- -log10(DATA[, ..p_cols])
+    tempdata <- -log10(ref_hits[, ..p_cols])
     for (i in 2:length(p_cols)) {
       diff <- na.omit(data.table(tempdata[[i]] - tempdata[[1]]))
       p <- ggplot(diff, aes(x = V1)) +
-        geom_histogram(binwidth = .5) +
+        geom_histogram() +
         xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
         ggtitle(paste0("Is ", studies[1], " p-value getting stronger in meta-analysis (drop ", studies[i], ")")) +
         geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
