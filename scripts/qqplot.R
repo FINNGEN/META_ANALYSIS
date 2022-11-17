@@ -43,7 +43,7 @@ pcols <- unlist(strsplit(opt$options$pval_col,","))
 file <- opt$options$file
 print(paste("reading file:", file))
 
-data <- fread(file, header=T, select=c(pcols,c(bp_col,chr_col)))
+data <- fread(cmd=paste("gunzip -c", file), header=T, select=c(pcols,c(bp_col,chr_col)))
 
 print(summary(data))
 print( summary( data[[chr_col]] ) )
