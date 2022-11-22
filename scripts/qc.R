@@ -90,7 +90,7 @@ if (leave) {
 }
 
 message("Reading file ", file, " ...")
-data <- fread(cmd=paste("gunzip -c", file), header = T, select = keep_cols)
+data <- fread(file, header = T, select = keep_cols)
 
 for (pval_thresh_i in pval_thresh) {
   
