@@ -139,7 +139,7 @@ for (pval_thresh_i in pval_thresh) {
         sig_loc_list[[pval_col]] <- rbind(sig_loc_list[[pval_col]], maxrow)
       }
     }
-    messae("Found ", n_sig_loci, " significant loci.")
+    message("Found ", n_sig_loci, " significant loci.")
     qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := n_sig_loci]
   }
   rm(tempdata)
