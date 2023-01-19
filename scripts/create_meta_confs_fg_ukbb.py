@@ -73,6 +73,11 @@ def run():
     mapping[OPTIONAL_COLS] = mapping[OPTIONAL_COLS].fillna(0)
     mapping.dropna(axis=0, how='any', inplace=True)
 
+    # Check for duplicate phenotype names
+    if any(mapping[['fg_phenotype']].duplicated()):
+        duplicates = pd.unique(mapping.loc[mapping[['fg_phenotype']].duplicated(), 'fg_phenotype']).tolist()
+        raise Exception(f'Found duplicate phenotype names: {duplicates}.\n Make them unique and try again...')
+
     # Print summary stat links to file
     mapping[['fg_link', 'ukbb_link']].to_csv(args.sumstat_filelist_name, header=False, index=False, sep='\t')
 
