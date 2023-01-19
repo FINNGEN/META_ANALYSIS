@@ -5,6 +5,7 @@ workflow meta_analysis {
     input {
         File sumstats_loc
         File pheno_confs
+        String docker
 
         Array[Array[String]] sumstat_files = read_tsv(sumstats_loc)
         Array[String] pheno_conf = read_lines(pheno_confs)
@@ -20,39 +21,55 @@ workflow meta_analysis {
                     pheno = pheno,
                     conf = pheno_conf[i],
                     sumstat_files = sumstat_files[i],
-                    chrom = chr+1
+                    chrom = chr+1,
+                    docker = docker
             }
         }
 
         call combine_chrom_metas {
             input:
                 pheno = pheno,
-                meta_outs = run_range.out
+                meta_outs = run_range.out,
+                docker = docker
         }
 
         call add_rsids {
             input:
-                meta_file = combine_chrom_metas.meta_out
+                meta_file = combine_chrom_metas.meta_out,
+                docker = docker
         }
 
-        call meta_qq {
+        call plots {
             input:
-                meta_file = combine_chrom_metas.meta_out
+                meta_file = combine_chrom_metas.meta_out,
+                conf = pheno_conf[i],
+                pheno = pheno,
+                docker = docker
         }
 
         call post_filter {
             input:
-                meta_file = add_rsids.meta_out
+                meta_file = add_rsids.meta_out,
+                docker = docker
         }
 
+    }
+
+    call gather_qc {
+        input:
+            qc = plots.qc,
+            docker = docker
     }
 
     output {
         Array[File] metas = combine_chrom_metas.meta_out
         Array[File] metas_with_rsids = add_rsids.meta_out
         Array[File] filtered_metas = post_filter.filtered_meta_out
-        Array[Array[File]] meta_pngs = meta_qq.pngs
-        Array[Array[File]] meta_lambdas = meta_qq.lambdas
+        Array[Array[File]] pngs = plots.pngs
+        Array[Array[File]] pdfs = plots.pdfs
+        Array[Array[File]] lambdas = plots.lambdas
+        Array[Array[File]] qc = plots.qc
+        Array[File] gathered_qc = gather_qc.qcs
     }
 }
 
@@ -64,8 +81,8 @@ task run_range {
         String pheno
         String chrom
         File conf
-
         String docker
+
         String method
         String opts
     }
@@ -106,7 +123,6 @@ task combine_chrom_metas {
     input {
         Array[File] meta_outs
         String pheno
-
         String docker
     }
 
@@ -148,9 +164,9 @@ task add_rsids {
 
     input {
         File meta_file
+        String docker
 
         File ref_file
-        String docker
 
         String base = basename(meta_file, ".tsv.gz")
     }
@@ -237,15 +253,19 @@ task add_rsids {
 
 }
 
-# Generate qq and manhattan plots from meta-analysis results
-task meta_qq {
+# Generate qc plots from meta-analysis results
+task plots {
 
     input {
         File meta_file
+        File conf
+        String pheno
+        String docker
 
         Int loglog_ylim
-        String docker
+        String pval_thresholds
         String pvals_to_plot
+        String af_col_suffix
 
         String base = basename(meta_file)
     }
@@ -256,20 +276,35 @@ task meta_qq {
 
         mv ~{meta_file} ~{base}
 
-        /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col ~{pvals_to_plot} --loglog_ylim ~{loglog_ylim}
+        [[ "~{pvals_to_plot}" =~ "leave_" ]] && loo="--loo" || loo=""
+
+        /META_ANALYSIS/scripts/qc.R --file ~{base} \
+        --conf ~{conf} \
+        --af_alt_col_suffix ~{af_col_suffix} \
+        --pheno ~{pheno} \
+        --pval_thresh ~{pval_thresholds} \
+        $loo
+
+        /META_ANALYSIS/scripts/qqplot.R --file ~{base} \
+        --bp_col "POS" \
+        --chrcol "#CHR" \
+        --pval_col ~{pvals_to_plot} \
+        --loglog_ylim ~{loglog_ylim}
 
     >>>
 
     output {
         Array[File] pngs = glob("*.png")
+        Array[File] pdfs = glob("*.pdf")
         Array[File] lambdas = glob("*.txt")
+        Array[File] qc = glob("*.tsv")
     }
 
     runtime {
         docker: "~{docker}"
-        cpu: "1"
-        memory: "20 GB"
-        disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
+        cpu: "2"
+        memory: "32 GB"
+        disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
@@ -281,7 +316,6 @@ task post_filter {
 
     input {
         File meta_file
-
         String docker
 
         String base = basename(meta_file, ".tsv.gz")
@@ -310,6 +344,58 @@ task post_filter {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
+        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        preemptible: 2
+        noAddress: true
+    }
+}
+
+# Gather qc metrics to one file
+task gather_qc {
+
+    input {
+        Array[Array[File]] qc
+        String docker
+
+        Array[File] qcs = flatten(qc)
+    }
+
+    command <<<
+
+        Rscript - <<EOF
+
+        suppressPackageStartupMessages(library(data.table))
+
+        files <- strsplit(x = "~{sep=" " qcs}", split = " ")[[1]]
+        files_list <- split(files, gsub(".*[.]tsv[.]gz[.]qc[.]|[.]tsv", "", files))
+
+        merged_list <- lapply(files_list, function(x) {
+            do.call(rbind, lapply(x, fread))
+        })
+
+        for(i in names(merged_list)) {
+            fwrite(x = merged_list[[i]],
+                    file = paste0("qc.", i, ".tsv"),
+                    sep = "\t",
+                    quote = F,
+                    col.names = T,
+                    row.names = F,
+                    na = "NA")
+        }
+
+        EOF
+
+    >>>
+
+    output {
+        Array[File] qcs = glob("qc.*.tsv")
+    }
+    
+    runtime {
+        docker: "~{docker}"
+        cpu: 1
+        memory: "2 GB"
+        disks: "local-disk 2 HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true

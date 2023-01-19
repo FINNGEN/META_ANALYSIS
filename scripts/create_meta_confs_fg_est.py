@@ -42,7 +42,7 @@ def generate_json(mapping):
         'effect_type': 'beta',
         'pval': 'pval',
         'se': 'sebeta',
-        'extra_cols': ["af_alt", "AF.Cases", "AF.Controls", "b37_chr", "b37_pos", "b37_ref", "b37_alt", "liftover_info", "af_gnomad", "af_fc"]
+        'extra_cols': ["af_alt"]
     }
 
     json_file = 'jsons/' + mapping['fg_phenotype'] + '.json' if os.path.isdir('jsons') else mapping['fg_phenotype'] + '.json'
@@ -70,6 +70,11 @@ def run():
         if col not in mapping.columns:
             mapping[col] = 0
     mapping.dropna(axis=0, how='any', inplace=True)
+
+    # Check for duplicate phenotype names
+    if any(mapping[['fg_phenotype']].duplicated()):
+        duplicates = pd.unique(mapping.loc[mapping[['fg_phenotype']].duplicated(), 'fg_phenotype']).tolist()
+        raise Exception(f'Found duplicate phenotype names: {duplicates}.\n Make them unique and try again...')
 
     # Print summary stat links to file
     mapping[['fg_link', 'estbb_link']].to_csv(args.sumstat_filelist_name, header=False, index=False, sep='\t')

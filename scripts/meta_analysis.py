@@ -661,7 +661,7 @@ def run():
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
     parser.add_argument('--is_het_test', action='store_true', help='Do heterogeneity tests based on Cochrans Q and output het_p')
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
-    parser.add_argument('--sep', default='\t', action='store', help='Input file field separator (Default: "\t")')
+    parser.add_argument('--sep', default='\t', action='store', help='Input file field separator (Default: "\\t")')
     parser.add_argument('--chrom', action='store', type=str, help='Restrict to given chromosome')
     parser.add_argument('--flip_indels', action='store_true', help='Try variant aligning by flipping indels also. By default indels are not flipped')
 
