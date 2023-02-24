@@ -66,20 +66,14 @@ task clean_filter {
         echo "~{sumstat_file}"
         echo ""
 
-        catcmd="cat"
-        if [[ ~{sumstat_file} == *.gz ]] || [[ ~{sumstat_file} == *.bgz ]]
-        then
-            catcmd="zcat"
-        fi
-
         echo "`date` original number of variants"
-        $catcmd ~{sumstat_file} | tail -n+2 | wc -l
+        zcat -f ~{sumstat_file} | tail -n+2 | wc -l
 
-        chr_col=$($catcmd ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{chr_col}" | head -1 | cut -d ':' -f1)
-        pos_col=$($catcmd ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{pos_col}" | head -1 | cut -d ':' -f1)
+        chr_col=$(zcat -f ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{chr_col}" | head -1 | cut -d ':' -f1)
+        pos_col=$(zcat -f ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{pos_col}" | head -1 | cut -d ':' -f1)
         printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
-        $catcmd ~{sumstat_file} | awk ' \
+        zcat -f ~{sumstat_file} | awk ' \
             BEGIN{FS="\t| "; OFS="\t"}
             NR==1 {
                 for (i=1;i<=NF;i++) {
