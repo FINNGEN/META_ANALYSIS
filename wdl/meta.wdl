@@ -39,17 +39,17 @@ workflow meta_analysis {
                 docker = docker
         }
 
-        call plots {
-            input:
-                meta_file = combine_chrom_metas.meta_out,
-                conf = pheno_conf[i],
-                pheno = pheno,
-                docker = docker
-        }
-
         call post_filter {
             input:
                 meta_file = add_rsids.meta_out,
+                docker = docker
+        }
+
+        call plots {
+            input:
+                meta_file = post_filter.filtered_meta_out,
+                conf = pheno_conf[i],
+                pheno = pheno,
                 docker = docker
         }
 
