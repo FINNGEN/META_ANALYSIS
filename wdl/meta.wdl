@@ -39,17 +39,17 @@ workflow meta_analysis {
                 docker = docker
         }
 
-        call plots {
-            input:
-                meta_file = combine_chrom_metas.meta_out,
-                conf = pheno_conf[i],
-                pheno = pheno,
-                docker = docker
-        }
-
         call post_filter {
             input:
                 meta_file = add_rsids.meta_out,
+                docker = docker
+        }
+
+        call plots {
+            input:
+                meta_file = post_filter.filtered_meta_out,
+                conf = pheno_conf[i],
+                pheno = pheno,
                 docker = docker
         }
 
@@ -267,14 +267,16 @@ task plots {
         String pvals_to_plot
         String af_col_suffix
 
-        String base = basename(meta_file)
+        String base = basename(meta_file, ".tsv.gz")
     }
 
     command <<<
 
         set -euxo pipefail
 
-        mv ~{meta_file} ~{base}
+        export OMP_NUM_THREADS=1
+
+        gunzip -c ~{meta_file} > ~{base}
 
         [[ "~{pvals_to_plot}" =~ "leave_" ]] && loo="--loo" || loo=""
 
@@ -303,8 +305,8 @@ task plots {
     runtime {
         docker: "~{docker}"
         cpu: "2"
-        memory: "32 GB"
-        disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
+        memory: "20 GB"
+        disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
@@ -367,7 +369,7 @@ task gather_qc {
         suppressPackageStartupMessages(library(data.table))
 
         files <- strsplit(x = "~{sep=" " qcs}", split = " ")[[1]]
-        files_list <- split(files, gsub(".*[.]tsv[.]gz[.]qc[.]|[.]tsv", "", files))
+        files_list <- split(files, gsub(".*[.]qc[.]|[.]tsv", "", files))
 
         merged_list <- lapply(files_list, function(x) {
             do.call(rbind, lapply(x, fread))

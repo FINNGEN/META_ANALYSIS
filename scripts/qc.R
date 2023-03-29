@@ -92,6 +92,13 @@ if (leave) {
 message("Reading file ", file, " ...")
 data <- fread(file, header = T, select = keep_cols)
 
+# Remove variants not in reference
+data <- data[! is.na(get(study_pval_cols[[1]]))]
+
+# Remove variants with weak pvals that will be never used
+pass <- apply(data[, ..pval_cols], 1, function(x) any(x < max(pval_thresh), na.rm = T))
+data <- data[pass]
+
 for (pval_thresh_i in pval_thresh) {
   
   message("Calculating qc metrics with p-value threshold ", pval_thresh_i, " ...")
@@ -100,7 +107,7 @@ for (pval_thresh_i in pval_thresh) {
   
   qc_dt_i <- copy(qc_dt)
   
-  pass <- apply(data[, ..pval_cols], 1, function(x) any(x < pval_thresh_i, na.rm = T)) & ! is.na(data[[study_pval_cols[[1]]]])
+  pass <- apply(data[, ..pval_cols], 1, function(x) any(x < pval_thresh_i, na.rm = T))
   DATA <- data[pass]
   
   # Get gw signif hits
@@ -143,9 +150,6 @@ for (pval_thresh_i in pval_thresh) {
     qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := n_sig_loci]
   }
   rm(tempdata)
-  
-  #pass <- DATA[[study_pval_cols[1]]] < pval_thresh_i
-  #DATA <- DATA[pass]
   
   ref_hits <- sig_loc_list[[pval_cols[1]]]
   
