@@ -230,8 +230,8 @@ task lift_postprocess {
         pos_col = "~{pos_col}"
         ref_col = "~{ref_col}"
         alt_col = "~{alt_col}"
-        af_col = ~{if defined(af_col) then "'af_col'" else "None"}
-        beta_col = ~{if defined(beta_col) then "'beta_col'" else "None"}
+        af_col = ~{if defined(af_col) then "'~{af_col}'" else "None"}
+        beta_col = ~{if defined(beta_col) then "'~{beta_col}'" else "None"}
 
         s_f = gzip.open(sumstat, 'rt')
         sumstat_header = s_f.readline().strip().split(delim)
@@ -293,8 +293,8 @@ task lift_postprocess {
 
         EOF
 
-        chr_col_n=`zcat ~{base}.unsorted.tsv.gz | awk -v RS='~{delim}' '/~{chr_col}/{print NR; exit}'`
-        pos_col_n=`zcat ~{base}.unsorted.tsv.gz | awk -v RS='~{delim}' '/~{pos_col}/{print NR; exit}'`
+        chr_col_n=`zcat ~{base}.unsorted.tsv.gz | head -n 1 | awk -v RS='~{delim}' '/~{chr_col}/{print NR; exit}'`
+        pos_col_n=`zcat ~{base}.unsorted.tsv.gz | head -n 1 | awk -v RS='~{delim}' '/~{pos_col}/{print NR; exit}'`
 
         cat \
         <(zcat ~{base}.unsorted.tsv.gz | sed '1!d') \
