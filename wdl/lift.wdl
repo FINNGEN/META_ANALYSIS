@@ -11,8 +11,8 @@ workflow liftover {
         String pos_col
         String ref_col
         String alt_col
-        String af_col
-        String beta_col
+        String? af_col
+        String? beta_col
     }
 
     scatter (sumstat_file in sumstat_files) {
@@ -199,8 +199,8 @@ task lift_postprocess {
         String pos_col
         String ref_col
         String alt_col
-        String af_col
-        String beta_col
+        String? af_col
+        String? beta_col
 
         String docker
 
@@ -209,7 +209,7 @@ task lift_postprocess {
 
     command <<<
 
-        set -euxo pipefail
+        set -eux
 
         # Sort by old positions
         grep -v "^#" ~{lifted_vcf} | tr ":" "\t" | awk '
@@ -217,7 +217,7 @@ task lift_postprocess {
         { gsub("chr", ""); gsub("X", "23"); gsub("Y", "24"); print $1,$2,$7,$8,$3,$4,$5,$6,$11 }
         ' | sort -k5,5g -k6,6g > ~{base}.tsv
 
-        python3 <<EOF | sort -k1,1g -k2,2g | bgzip > ~{base}.tsv.gz
+        python3 <<EOF | bgzip > ~{base}.unsorted.tsv.gz
 
         import gzip
         from collections import defaultdict
@@ -230,8 +230,8 @@ task lift_postprocess {
         pos_col = "~{pos_col}"
         ref_col = "~{ref_col}"
         alt_col = "~{alt_col}"
-        af_col = "~{af_col}"
-        beta_col = "~{beta_col}"
+        af_col = ~{if defined(af_col) then "'~{af_col}'" else "None"}
+        beta_col = ~{if defined(beta_col) then "'~{beta_col}'" else "None"}
 
         s_f = gzip.open(sumstat, 'rt')
         sumstat_header = s_f.readline().strip().split(delim)
@@ -272,13 +272,17 @@ task lift_postprocess {
                     sumstat_line[sumstat_h_idx[ref_col]] = new_ref
                     sumstat_line[sumstat_h_idx[alt_col]] = new_alt
                     if 'SwappedAlleles' in info_list:
-                        sumstat_af = sumstat_line[sumstat_h_idx[af_col]] if sumstat_line[sumstat_h_idx[af_col]] != "NA" else None
-                        sumstat_beta = sumstat_line[sumstat_h_idx[beta_col]] if sumstat_line[sumstat_h_idx[beta_col]] != "NA" else None
-                        sumstat_line[sumstat_h_idx[af_col]] = str(1 - float(sumstat_af) if sumstat_af is not None else "NA")
-                        sumstat_line[sumstat_h_idx[beta_col]] = str(-1 * float(sumstat_beta) if sumstat_beta is not None else "NA")
+                        if af_col is not None:
+                            sumstat_af = sumstat_line[sumstat_h_idx[af_col]] if sumstat_line[sumstat_h_idx[af_col]] != "NA" else None
+                            sumstat_line[sumstat_h_idx[af_col]] = str(1 - float(sumstat_af) if sumstat_af is not None else "NA")
+                        if beta_col is not None:
+                            sumstat_beta = sumstat_line[sumstat_h_idx[beta_col]] if sumstat_line[sumstat_h_idx[beta_col]] != "NA" else None
+                            sumstat_line[sumstat_h_idx[beta_col]] = str(-1 * float(sumstat_beta) if sumstat_beta is not None else "NA")
                     sumstat_line.extend([str(old_chr), str(old_pos), old_ref, old_alt, info])
                     print(delim.join(sumstat_line))
                     sumstat_line = s_f.readline().strip().split(delim)
+                    if len(sumstat_line) == 1: # final newline
+                        break
                     try:
                         sumstat_chr = int(sumstat_line[sumstat_h_idx[chr_col]].replace('chr', '').replace('X', '23').replace('Y', '24'))
                         sumstat_pos = int(sumstat_line[sumstat_h_idx[pos_col]])
@@ -289,7 +293,19 @@ task lift_postprocess {
 
         EOF
 
-        tabix -S 1 -s 1 -b 2 -e 2 ~{base}.tsv.gz
+        chr_col_n=`zcat ~{base}.unsorted.tsv.gz | head -n 1 | awk -v RS='~{delim}' '/~{chr_col}/{print NR; exit}'`
+        pos_col_n=`zcat ~{base}.unsorted.tsv.gz | head -n 1 | awk -v RS='~{delim}' '/~{pos_col}/{print NR; exit}'`
+
+        cat \
+        <(zcat ~{base}.unsorted.tsv.gz | sed '1!d') \
+        <(zcat ~{base}.unsorted.tsv.gz | tail -n+2 | sort -k${chr_col_n},${chr_col_n}V -k${pos_col_n},${pos_col_n}g) | \
+        bgzip > ~{base}.tsv.gz
+
+        if [[ "~{delim}" == $'\t' ]]; then
+          tabix -s ${chr_col_n} -b ${pos_col_n} -e ${pos_col_n} ~{base}.tsv.gz
+        else
+          touch ~{base}.tsv.gz.tbi
+        fi
 
     >>>
 
