@@ -69,6 +69,7 @@ workflow meta_analysis {
         Array[Array[File]] pdfs = plots.pdfs
         Array[Array[File]] lambdas = plots.lambdas
         Array[Array[File]] qc = plots.qc
+        Array[Array[File]] qc_hits = plots.hits
         Array[File] gathered_qc = gather_qc.qcs
     }
 }
@@ -300,6 +301,7 @@ task plots {
         Array[File] pdfs = glob("*.pdf")
         Array[File] lambdas = glob("*.txt")
         Array[File] qc = glob("*.tsv")
+        Array[File] hits = glob("*.hits")
     }
 
     runtime {
