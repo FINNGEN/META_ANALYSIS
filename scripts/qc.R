@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson", "stringi")
+packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson", "stringi", "ggpubr")
 
 for (p in packs) {
   if (suppressPackageStartupMessages(!require(p, character.only = T))) {
