@@ -192,13 +192,16 @@ for (pval_thresh_i in pval_thresh) {
   )
   
   fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
-  fwrite(ref_hits, paste0(output_prefix, ".hits"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
   
   # Don't try plotting if less than two significant SNPs
   if (is.null(ref_hits)) {
     message("Skipping plotting due to no significant hits.")
+    writeLines(names(data), paste0(output_prefix, ".tsv"), sep = "\t")
     next
   }
+  
+  fwrite(ref_hits, paste0(output_prefix, ".hits"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  
   if (nrow(ref_hits) < 2) {
     message("Skipping plotting due to less than 2 significant hits.")
     next
