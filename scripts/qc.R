@@ -196,7 +196,6 @@ for (pval_thresh_i in pval_thresh) {
   # Don't try plotting if less than two significant SNPs
   if (is.null(ref_hits)) {
     message("Skipping plotting due to no significant hits.")
-    writeLines(names(data), paste0(output_prefix, ".tsv"), sep = "\t")
     next
   }
   
