@@ -36,7 +36,7 @@ option_list <- list(
   make_option(c("--pheno"), type="character", default="pheno",
               help="phenotype name [default=%default]", metavar="character"),
   make_option(c("-w","--weighted"), action="store_true", default=FALSE,
-              help="do inverse variance weighted linear regression"),
+              help="do inverse variance weighted linear regression")
 );
 
 opt_parser <- OptionParser(option_list = option_list)
