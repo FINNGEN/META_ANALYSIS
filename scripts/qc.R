@@ -34,7 +34,9 @@ option_list <- list(
   make_option(c("--af_alt_col_suffix"), type="character", default="_af_alt",
               help="af alt column suffix [default=%default]", metavar="character"),
   make_option(c("--pheno"), type="character", default="pheno",
-              help="phenotype name [default=%default]", metavar="character")
+              help="phenotype name [default=%default]", metavar="character"),
+  make_option(c("-w","--weighted"), action="store_true", default=FALSE,
+              help="do inverse variance weighted linear regression"),
 );
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -53,6 +55,7 @@ method <- opt$options$method
 pval_thresh <- sort(unique(as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", opt$options$pval_thresh), ",")))), decreasing = T)
 leave <- opt$options$loo
 region <- round(opt$options$region * 10^6 / 2, 0)
+weighted <- opt$options$weighted
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
@@ -78,7 +81,16 @@ af_cols <- paste0(studies, af_alt_col_suffix)
 pval_cols <- c(study_pval_cols, meta_pval_col)
 meta_pval_cols <- meta_pval_col
 
-keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
+keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols,
+               study_pval_cols, meta_pval_col,
+               study_beta_cols, meta_beta_col,
+               het_p_col)
+
+if (weighted) {
+  study_sebeta_cols <- sapply(conf$meta, function(x) paste(x$name, x$se, sep = "_"))
+  meta_sebeta_col <- paste("all", method, "meta_sebeta", sep = "_")
+  keep_cols <- c(keep_cols, study_sebeta_cols, meta_sebeta_col)
+}
 
 if (leave) {
   leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
@@ -153,19 +165,26 @@ for (pval_thresh_i in pval_thresh) {
   
   ref_hits <- sig_loc_list[[pval_cols[1]]]
   
-  for (beta_col in c(study_beta_cols[-1], meta_beta_col)) {
+  beta_cols <- c(study_beta_cols[-1], meta_beta_col)
+  sebeta_cols <- c(study_sebeta_cols[-1], meta_sebeta_col)
+  for (i in 1:length(beta_cols)) {
     tryCatch(
       expr = {
-        m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = ref_hits)
+        if (weighted) {
+          weights <- 1 / ref_hits[[sebeta_cols[i]]]^2
+          m <- lm(as.formula(paste(beta_cols[i], "~", study_beta_cols[1], "+ 0")), data = ref_hits, weights = weights)
+        } else {
+          m <- lm(as.formula(paste(beta_cols[i], "~", study_beta_cols[1], "+ 0")), data = ref_hits)
+        }
         ms <- summary(m)
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := round(ms$r.squared, 3)]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2", sep = "_")) := round(ms$r.squared, 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
       },
       error = function(e) {
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := NA]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := NA]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "slope", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2adj", sep = "_")) := NA]
       }
     )
   }
