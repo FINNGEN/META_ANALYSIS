@@ -286,6 +286,7 @@ task plots {
         --af_alt_col_suffix ~{af_col_suffix} \
         --pheno ~{pheno} \
         --pval_thresh ~{pval_thresholds} \
+        --weighted \
         $loo
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} \
