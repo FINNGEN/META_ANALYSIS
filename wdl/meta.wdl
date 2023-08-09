@@ -71,6 +71,7 @@ workflow meta_analysis {
         Array[Array[File]] qc = plots.qc
         Array[Array[File]] qc_hits = plots.hits
         Array[File] gathered_qc = gather_qc.qcs
+        File qc_xlsx = gather_qc.qc_xlsx
     }
 }
 
@@ -388,12 +389,15 @@ task gather_qc {
                     na = "NA")
         }
 
+        openxlsx::write.xlsx(merged_list, "qc.xlsx", asTable = T)
+
         EOF
 
     >>>
 
     output {
         Array[File] qcs = glob("qc.*.tsv")
+        File qc_xlsx = "qc.xlsx"
     }
     
     runtime {
