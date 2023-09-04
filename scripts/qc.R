@@ -218,7 +218,9 @@ for (pval_thresh_i in pval_thresh) {
     next
   }
   
-  fwrite(ref_hits, paste0(output_prefix, ".hits"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  for (h in names(sig_loc_list)) {
+    fwrite(sig_loc_list[[h]], paste(output_prefix, h, "hits", sep = "."), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  }
   
   if (nrow(ref_hits) < 2) {
     message("Skipping plotting due to less than 2 significant hits.")
@@ -226,7 +228,7 @@ for (pval_thresh_i in pval_thresh) {
   }
   
   # Change afs to mafs
-  for(af_col in af_cols) {
+  for (af_col in af_cols) {
     af <- ref_hits[[af_col]]
     af[af > 0.5 & ! is.na(af)] <- 1 - af[af > 0.5 & ! is.na(af)]
     ref_hits[, (af_col) := af]
