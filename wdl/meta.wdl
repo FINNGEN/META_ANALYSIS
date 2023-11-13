@@ -69,7 +69,9 @@ workflow meta_analysis {
         Array[Array[File]] pdfs = plots.pdfs
         Array[Array[File]] lambdas = plots.lambdas
         Array[Array[File]] qc = plots.qc
+        Array[Array[File]] qc_hits = plots.hits
         Array[File] gathered_qc = gather_qc.qcs
+        File qc_xlsx = gather_qc.qc_xlsx
     }
 }
 
@@ -285,6 +287,7 @@ task plots {
         --af_alt_col_suffix ~{af_col_suffix} \
         --pheno ~{pheno} \
         --pval_thresh ~{pval_thresholds} \
+        --weighted \
         $loo
 
         /META_ANALYSIS/scripts/qqplot.R --file ~{base} \
@@ -300,6 +303,7 @@ task plots {
         Array[File] pdfs = glob("*.pdf")
         Array[File] lambdas = glob("*.txt")
         Array[File] qc = glob("*.tsv")
+        Array[File] hits = glob("*.hits")
     }
 
     runtime {
@@ -385,12 +389,15 @@ task gather_qc {
                     na = "NA")
         }
 
+        openxlsx::write.xlsx(merged_list, "qc.xlsx", asTable = T)
+
         EOF
 
     >>>
 
     output {
         Array[File] qcs = glob("qc.*.tsv")
+        File qc_xlsx = "qc.xlsx"
     }
     
     runtime {

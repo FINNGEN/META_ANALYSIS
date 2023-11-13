@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson", "stringi")
+packs <- c("ggplot2", "data.table", "R.utils", "optparse", "rjson", "stringi", "ggpubr")
 
 for (p in packs) {
   if (suppressPackageStartupMessages(!require(p, character.only = T))) {
@@ -34,7 +34,9 @@ option_list <- list(
   make_option(c("--af_alt_col_suffix"), type="character", default="_af_alt",
               help="af alt column suffix [default=%default]", metavar="character"),
   make_option(c("--pheno"), type="character", default="pheno",
-              help="phenotype name [default=%default]", metavar="character")
+              help="phenotype name [default=%default]", metavar="character"),
+  make_option(c("-w","--weighted"), action="store_true", default=FALSE,
+              help="do inverse variance weighted linear regression")
 );
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -53,6 +55,7 @@ method <- opt$options$method
 pval_thresh <- sort(unique(as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", opt$options$pval_thresh), ",")))), decreasing = T)
 leave <- opt$options$loo
 region <- round(opt$options$region * 10^6 / 2, 0)
+weighted <- opt$options$weighted
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
@@ -78,7 +81,16 @@ af_cols <- paste0(studies, af_alt_col_suffix)
 pval_cols <- c(study_pval_cols, meta_pval_col)
 meta_pval_cols <- meta_pval_col
 
-keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols, study_pval_cols, meta_pval_col, study_beta_cols, meta_beta_col, het_p_col)
+keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols,
+               study_pval_cols, meta_pval_col,
+               study_beta_cols, meta_beta_col,
+               het_p_col)
+
+if (weighted) {
+  study_sebeta_cols <- sapply(conf$meta, function(x) paste(x$name, x$se, sep = "_"))
+  meta_sebeta_col <- paste("all", method, "meta_sebeta", sep = "_")
+  keep_cols <- c(keep_cols, study_sebeta_cols, meta_sebeta_col)
+}
 
 if (leave) {
   leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
@@ -153,19 +165,26 @@ for (pval_thresh_i in pval_thresh) {
   
   ref_hits <- sig_loc_list[[pval_cols[1]]]
   
-  for (beta_col in c(study_beta_cols[-1], meta_beta_col)) {
+  beta_cols <- c(study_beta_cols[-1], meta_beta_col)
+  sebeta_cols <- c(study_sebeta_cols[-1], meta_sebeta_col)
+  for (i in 1:length(beta_cols)) {
     tryCatch(
       expr = {
-        m <- lm(as.formula(paste(beta_col, "~", study_beta_cols[1], "+ 0")), data = ref_hits)
+        if (weighted) {
+          weights <- 1 / ref_hits[[sebeta_cols[i]]]^2
+          m <- lm(as.formula(paste(beta_cols[i], "~", study_beta_cols[1], "+ 0")), data = ref_hits, weights = weights)
+        } else {
+          m <- lm(as.formula(paste(beta_cols[i], "~", study_beta_cols[1], "+ 0")), data = ref_hits)
+        }
         ms <- summary(m)
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := round(ms$r.squared, 3)]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2", sep = "_")) := round(ms$r.squared, 3)]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
       },
       error = function(e) {
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "slope", sep = "_")) := NA]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2", sep = "_")) := NA]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_col, "r2adj", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "slope", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2", sep = "_")) := NA]
+        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2adj", sep = "_")) := NA]
       }
     )
   }
@@ -198,23 +217,26 @@ for (pval_thresh_i in pval_thresh) {
     message("Skipping plotting due to no significant hits.")
     next
   }
+  
+  for (h in names(sig_loc_list)) {
+    fwrite(sig_loc_list[[h]], paste(output_prefix, h, "hits", sep = "."), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  }
+  
   if (nrow(ref_hits) < 2) {
     message("Skipping plotting due to less than 2 significant hits.")
     next
   }
   
   # Change afs to mafs
-  for(af_col in af_cols) {
+  for (af_col in af_cols) {
     af <- ref_hits[[af_col]]
     af[af > 0.5 & ! is.na(af)] <- 1 - af[af > 0.5 & ! is.na(af)]
     ref_hits[, (af_col) := af]
   }
   rm(af)
   
-  pdf(paste0(output_prefix, ".pdf"))
-  
   # P-value comparisons scatter plot
-  for (i in 2:length(study_pval_cols)) {
+  pval_plots <- lapply(2:length(study_pval_cols), function(i) {
     tempcols <- study_pval_cols[c(1,i)]
     af_col <- af_cols[i]
     tempdata <- na.omit(cbind(-log10(ref_hits[, ..tempcols]), ref_hits[, ..af_col]))
@@ -226,20 +248,24 @@ for (pval_thresh_i in pval_thresh) {
       #geom_smooth(method = "lm", se = F) +
       geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
       expand_limits(x = 0, y = 0) +
-      xlab(paste0(studies[1], "_mlogp")) +
-      ylab(paste0(studies[i], "_mlogp")) +
+      labs(x = paste(studies[1], "mlogp"),
+           y = paste(studies[i], "mlogp"),
+           color = "Ext maf") +
       scale_color_manual(labels = names(color_vector), values = color_vector, drop = F) +
-      theme_bw()
+      theme_bw() +
+      theme(axis.title = element_text(size = 7),
+            axis.text = element_text(size = 7))
     
     min_limit <- min(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[1], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[1])
     max_limit <- max(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[2], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[2])
     p <- p + xlim(min_limit, max_limit) + ylim(min_limit, max_limit)
     
-    plot(p)
-  }
+    p
+  })
+  
   
   # Effect size comparisons scatter plot
-  for (i in 2:length(study_beta_cols)) {
+  beta_plots <- lapply(2:length(study_beta_cols), function(i) {
     af_col <- af_cols[i]
     tempcols <- c(study_beta_cols[c(1,i)], af_col)
     tempdata <- na.omit(ref_hits[, ..tempcols])
@@ -257,55 +283,79 @@ for (pval_thresh_i in pval_thresh) {
       geom_point() +
       stat_smooth(method = "lm", se = F, formula = "y ~ x + 0", fullrange = T, size = .8) +
       geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
-      xlab(paste0(studies[1], "_beta")) +
-      ylab(paste0(studies[i], "_beta")) +
+      labs(x = paste(studies[1], "beta"),
+           y = paste(studies[i], "beta"),
+           color = "Ext maf") +
       scale_color_manual(labels = names(color_vector), values = color_vector, drop = F) +
-      theme_bw()
+      theme_bw() +
+      theme(axis.title = element_text(size = 7),
+            axis.text = element_text(size = 7))
     
     min_limit <- min(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[1], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[1])
     max_limit <- max(ggplot_build(p)$layout$panel_scales_x[[1]]$range$range[2], ggplot_build(p)$layout$panel_scales_y[[1]]$range$range[2])
     p <- p + xlim(min_limit, max_limit) + ylim(min_limit, max_limit)
     
-    plot(p)
-  }
+    p
+  })
   
   # Het p histogram
   tempdata <- -log10(na.omit(ref_hits[, ..het_p_col]))
-  p <- ggplot(tempdata, aes_string(x = het_p_col)) +
+  het_hist <- ggplot(tempdata, aes_string(x = het_p_col)) +
     geom_histogram() +
     xlab(paste("all", method, "het_mlogp", sep = "_")) +
-    ggtitle("Heterogeneity -log10(p-value) distribution") +
-    theme_bw()
-  plot(p)
+    theme_bw() +
+    theme(axis.title = element_text(size = 7),
+          axis.text = element_text(size = 7))
   
   # P-value comparison histogram
   p_cols <- c(meta_pval_col, study_pval_cols[1])
   tempdata <- -log10(na.omit(ref_hits[, ..p_cols]))
   diff <- data.table(tempdata[[1]] - tempdata[[2]])
-  p <- ggplot(diff, aes(x = V1)) + 
+  pval_hist <- ggplot(diff, aes(x = V1)) + 
     geom_histogram() +
     xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-    ggtitle(paste("Is", studies[1], "p-value getting stronger in meta-analysis (all studies)")) +
     geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
-    theme_bw()
-  plot(p)
+    theme_bw() +
+    theme(axis.title = element_text(size = 7),
+          axis.text = element_text(size = 7))
   
   # Leave-one-out qc
   if (leave) {
     p_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
     tempdata <- -log10(ref_hits[, ..p_cols])
-    for (i in 2:length(p_cols)) {
+    loo_hists <- lapply(2:length(p_cols), function(i) {
       diff <- na.omit(data.table(tempdata[[i]] - tempdata[[1]]))
       p <- ggplot(diff, aes(x = V1)) +
         geom_histogram() +
         xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-        ggtitle(paste0("Is ", studies[1], " p-value getting stronger in meta-analysis (drop ", studies[i], ")")) +
         geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
-        theme_bw()
-      plot(p)
-    }
+        theme_bw() +
+        theme(axis.title = element_text(size = 7),
+              axis.text = element_text(size = 7))
+      p
+    })
   }
   
-  graphics.off()
+  pval_plots_arranged <- ggarrange(plotlist = pval_plots, common.legend = T, legend = "bottom", nrow = 1)
+  beta_plots_arranged <- ggarrange(plotlist = beta_plots, legend = "none", nrow = 1)
+  hists_arranged <- ggarrange(het_hist, pval_hist, legend = "none", nrow = 1)
+  
+  plotlist <- list(pval_plots_arranged, beta_plots_arranged, hists_arranged)
+  
+  if (leave) {
+    loo_hists_arranged <- ggarrange(plotlist = loo_hists, legend = "none", nrow = 1)
+    plotlist <- append(plotlist, list(loo_hists_arranged))
+  }
+  
+  plots_arranged <- ggarrange(plotlist = plotlist, ncol = 1) +
+    theme(axis.title = element_text(size = 7),
+          axis.text = element_text(size = 7))
+
+  ggsave(filename = paste0(output_prefix, ".pdf"),
+         plot = plots_arranged,
+         device = "pdf",
+         dpi = 300,
+         width = 7,
+         height = 9)
   
 }
