@@ -80,6 +80,10 @@ data[[chr_col]] <- gsub("MT|chrMT|M|chrM","25",data[[chr_col]])
 data[[chr_col]] <- as.numeric(data[[chr_col]])
 data <- data[ !is.na(data[[chr_col]]) ]
 
+## added dummy SNP column as updated manhattan function from qqman package fails without it.
+snp_col <- "SNP"  ## needs to be called "SNP" for manhattan() function of qqman
+data[[snp_col]] <- paste0(data[[chr_col]],":",data[[bp_col]])
+
 quants <- c(0.7,0.5,0.1,0.01, 0.001)
 
 
@@ -102,7 +106,7 @@ for( pcol in pcols) {
   print( summary(subdata[[pcol]] ))
   png( paste(output_prefix,"_",pcol,"_manhattan.png", sep=""), width=1000, height=400)
   logs <- -log10(subdata[[pcol]])
-  manhattan( data.table(subdata[,c(bp_col,pcol,chr_col), with=F]) , chr=chr_col, bp=bp_col, p=pcol, ylim=c( 2,max(logs)+1), main=file)
+  manhattan( data.table(subdata[,c(bp_col,pcol,chr_col,snp_col), with=F]) , chr=chr_col, bp=bp_col, snp=snp_col, p=pcol, ylim=c( 2,max(logs)+1), main=file)
   dev.off()
 
 
@@ -119,7 +123,7 @@ for( pcol in pcols) {
   tick_pos <- round(seq(1, max_loglog, length.out=max_loglog))
   tick_lab <- sapply(tick_pos, function(pos) { round(ifelse(pos < loglog_p, pos, loglog_p^(pos/loglog_p))) })
   png( paste(output_prefix,"_",pcol,"_manhattan_loglog.png", sep=""), width=1000, height=400)
-  manhattan( data.table(subdata[,c(bp_col,"p_scaled",chr_col), with=F]) , chr=chr_col, bp=bp_col, p="p_scaled", ylim=c( 2,max_loglog), yaxt="n", main=file)
+  manhattan( data.table(subdata[,c(bp_col,"p_scaled",chr_col,snp_col), with=F]) , chr=chr_col, bp=bp_col, snp=snp_col, p="p_scaled", ylim=c( 2,max_loglog), yaxt="n", main=file)
   axis(2, at = tick_pos, labels=tick_lab, las=2)
   dev.off()
 }
