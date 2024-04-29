@@ -116,9 +116,8 @@ task clean_filter {
                     $a["beta"]=log($a["beta"])
                 }
                 if (se_type=="ci") {
-                    split($a["sebeta"], ci, "-")
-                    split(ci[1], ci, ",")
-                    split(ci[1], ci, ";")
+                    sub(/[-;,|]/, " ", $a["sebeta"])
+                    split($a["sebeta"], ci, " ")
                     $a["sebeta"]=(ci[2]-ci[1])/(2*1.96)
                 }
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
