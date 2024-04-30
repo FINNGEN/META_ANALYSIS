@@ -99,7 +99,7 @@ task run_range {
         echo "chromosome: ~{chrom}"
         echo "conf: ~{conf}"
 
-        /META_ANALYSIS/scripts/meta_analysis.py ~{conf} ~{pheno}_chr~{chrom}_meta_out.tsv ~{method} ~{opts} --chrom ~{chrom}
+        meta_analysis.py ~{conf} ~{pheno}_chr~{chrom}_meta_out.tsv ~{method} ~{opts} --chrom ~{chrom}
 
         echo "`date` done"
     >>>
@@ -282,7 +282,7 @@ task plots {
 
         [[ "~{pvals_to_plot}" =~ "leave_" ]] && loo="--loo" || loo=""
 
-        /META_ANALYSIS/scripts/qc.R --file ~{base} \
+        qc.R --file ~{base} \
         --conf ~{conf} \
         --af_alt_col_suffix ~{af_col_suffix} \
         --pheno ~{pheno} \
@@ -290,7 +290,7 @@ task plots {
         --weighted \
         $loo
 
-        /META_ANALYSIS/scripts/qqplot.R --file ~{base} \
+        qqplot.R --file ~{base} \
         --bp_col "POS" \
         --chrcol "#CHR" \
         --pval_col ~{pvals_to_plot} \

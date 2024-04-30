@@ -451,8 +451,7 @@ task harmonize {
         mv ~{gnomad_ref} ~{gnomad_ref_base}
 
         echo "`date` harmonizing stats with gnomAD"
-        python3 /META_ANALYSIS/scripts/harmonize.py ~{base} ~{gnomad_ref_base} ~{options} \
-        | bgzip > ~{base}.~{gnomad_ref_base}
+        harmonize.py ~{base} ~{gnomad_ref_base} ~{options} | bgzip > ~{base}.~{gnomad_ref_base}
         
         tabix -s 1 -b 2 -e 2 ~{base}.~{gnomad_ref_base}
         echo "`date` done"
@@ -506,7 +505,7 @@ task plot {
         dev.off()
         EOF
 
-        /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ~{loglog_ylim}
+        qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ~{loglog_ylim}
 
     >>>
 
