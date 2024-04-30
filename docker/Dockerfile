@@ -1,4 +1,4 @@
-FROM eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7
+FROM eu.gcr.io/finngen-refinery-dev/bioinformatics:0.8.2
 
 ADD scripts /META_ANALYSIS/scripts
 
