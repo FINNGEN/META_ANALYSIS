@@ -76,6 +76,7 @@ task clean_filter {
         String pval_col
         String effect_type
         String se_type
+        String pval_type
     }
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
@@ -96,7 +97,7 @@ task clean_filter {
         printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
         zcat -f ~{sumstat_file} | awk ' \
-            BEGIN{FS="\t| "; OFS="\t"; effect_type=tolower("~{effect_type}"); se_type=tolower("~{se_type}")}
+            BEGIN{FS="\t| "; OFS="\t"; effect_type=tolower("~{effect_type}"); se_type=tolower("~{se_type}"); pval_type=tolower("~{pval_type}")}
             NR==1 {
                 for (i=1;i<=NF;i++) {
                     sub("^~{chr_col}$", "#CHR", $i);
@@ -119,6 +120,9 @@ task clean_filter {
                     sub(/[-;,|]/, " ", $a["sebeta"])
                     split($a["sebeta"], ci, " ")
                     $a["sebeta"]=(ci[2]-ci[1])/(2*1.96)
+                }
+                if (pval_type=="mlog10p") {
+                    $a["pval"]=10^(-$a["pval"])
                 }
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
                 if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["EXTRA"]!="TEST_FAIL") {
