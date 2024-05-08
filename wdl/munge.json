@@ -13,6 +13,7 @@
     "munge.clean_filter.effect_type": "OR",
     "munge.clean_filter.se_type": "CI",
     "munge.clean_filter.pval_type": "P",
+    "munge.clean_filter.flip_alleles": false,
     "munge.liftover": true,
     "munge.lift.docker": "eu.gcr.io/finngen-refinery-dev/picard:2.25.6",
     "munge.lift.chainfile": "gs://juham-fg/lift/chainfiles/hg19ToHg38.over.chain.gz",
