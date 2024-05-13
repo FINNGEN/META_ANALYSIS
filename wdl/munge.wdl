@@ -138,7 +138,7 @@ task clean_filter {
                         tmp=$a["REF"];
                         $a["REF"]=$a["ALT"];
                         $a["ALT"]=tmp;
-                        $a["beta"]=1-$a["beta"];
+                        $a["beta"]=-1*$a["beta"];
                         $a["af_alt"]=1-$a["af_alt"];
                     }
                     printf $1;
