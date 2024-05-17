@@ -127,6 +127,10 @@ task clean_filter {
                 if (se_type=="ci") {
                     sub(/[-;,|]/, " ", $a["sebeta"])
                     split($a["sebeta"], ci, " ")
+                    if (effect_type=="or") {
+                        ci[1]=log(ci[1])
+                        ci[2]=log(ci[2])
+                    }
                     $a["sebeta"]=(ci[2]-ci[1])/(2*1.96)
                 }
                 if (pval_type=="mlog10p") {
