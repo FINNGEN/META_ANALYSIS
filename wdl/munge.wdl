@@ -125,8 +125,7 @@ task clean_filter {
                     $a["beta"]=log($a["beta"])
                 }
                 if (se_type=="ci") {
-                    sub(/[-;,|]/, " ", $a["sebeta"])
-                    split($a["sebeta"], ci, " ")
+                    split($a["sebeta"], ci, ",")
                     if (effect_type=="or") {
                         ci[1]=log(ci[1])
                         ci[2]=log(ci[2])
