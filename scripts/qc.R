@@ -37,7 +37,7 @@ option_list <- list(
               help = "phenotype name [default=%default]", metavar = "character"),
   make_option(c("-w","--weighted"), action = "store_true", default = FALSE,
               help = "do inverse variance weighted linear regression"),
-  make_option(c("--keep-hla"), action = "store_true", default = FALSE,
+  make_option(c("--keep_hla"), action = "store_true", default = FALSE,
               help = "do not remove HLA region variants from QC")
 )
 
