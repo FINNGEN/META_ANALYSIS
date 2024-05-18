@@ -36,7 +36,9 @@ option_list <- list(
   make_option(c("--pheno"), type="character", default="pheno",
               help="phenotype name [default=%default]", metavar="character"),
   make_option(c("-w","--weighted"), action="store_true", default=FALSE,
-              help="do inverse variance weighted linear regression")
+              help="do inverse variance weighted linear regression"),
+  make_option(c("--keep-hla"), action="store_true", default=FALSE,
+              help="do not remove HLA region variants from QC"),
 );
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -56,6 +58,7 @@ pval_thresh <- sort(unique(as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", op
 leave <- opt$options$loo
 region <- round(opt$options$region * 10^6 / 2, 0)
 weighted <- opt$options$weighted
+keep_hla <- opt$options$keep_hla
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
@@ -110,6 +113,11 @@ data <- data[! is.na(get(study_pval_cols[[1]]))]
 # Remove variants with weak pvals that will be never used
 pass <- apply(data[, ..pval_cols], 1, function(x) any(x < max(pval_thresh), na.rm = T))
 data <- data[pass]
+
+# Remove HLA region variants
+if (! keep_hla) {
+  data <- data[! (data[[chr_col]] == 6 & data[[bp_col]] >= 25e6 & data[[bp_col]] <= 35e6)]
+}
 
 for (pval_thresh_i in pval_thresh) {
   
