@@ -40,7 +40,7 @@ option_list <- list(
   make_option("--keep_hla", action = "store_true", default = FALSE,
               help = "do not remove HLA region variants from QC"),
   make_option("--hla_region", type = "character", default = "20e6, 40e6",
-              help = "HLA region boundaries", metavar = "numeric"),
+              help = "HLA region boundaries", metavar = "numeric")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
