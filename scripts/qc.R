@@ -37,8 +37,10 @@ option_list <- list(
               help = "phenotype name [default=%default]", metavar = "character"),
   make_option(c("-w","--weighted"), action = "store_true", default = FALSE,
               help = "do inverse variance weighted linear regression"),
-  make_option(c("--keep_hla"), action = "store_true", default = FALSE,
-              help = "do not remove HLA region variants from QC")
+  make_option("--keep_hla", action = "store_true", default = FALSE,
+              help = "do not remove HLA region variants from QC"),
+  make_option("--hla_region", type = "character", default = "20e6, 40e6",
+              help = "HLA region boundaries", metavar = "numeric"),
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -59,6 +61,11 @@ leave <- opt$options$loo
 region <- round(opt$options$region * 10^6 / 2, 0)
 weighted <- opt$options$weighted
 keep_hla <- opt$options$keep_hla
+hla_region <- as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", opt$options$hla_region), ",")))
+
+if (length(hla_region) != 2) {
+  stop("HLA region boundaries must be two numbers separated by a comma.")
+}
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
@@ -116,7 +123,7 @@ data <- data[pass]
 
 # Remove HLA region variants
 if (! keep_hla) {
-  data <- data[! (data[[chr_col]] == 6 & data[[bp_col]] >= 20e6 & data[[bp_col]] <= 40e6)]
+  data <- data[! (data[[chr_col]] == 6 & data[[bp_col]] >= hla_region[1] & data[[bp_col]] <= hla_region[2])]
 }
 
 for (pval_thresh_i in pval_thresh) {
