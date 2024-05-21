@@ -116,7 +116,7 @@ data <- data[pass]
 
 # Remove HLA region variants
 if (! keep_hla) {
-  data <- data[! (data[[chr_col]] == 6 & data[[bp_col]] >= 25e6 & data[[bp_col]] <= 35e6)]
+  data <- data[! (data[[chr_col]] == 6 & data[[bp_col]] >= 20e6 & data[[bp_col]] <= 40e6)]
 }
 
 for (pval_thresh_i in pval_thresh) {
