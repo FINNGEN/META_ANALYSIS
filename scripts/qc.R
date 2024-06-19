@@ -314,22 +314,25 @@ for (pval_thresh_i in pval_thresh) {
   })
   
   # Het p histogram
-  tempdata <- -log10(na.omit(ref_hits[, ..het_p_col]))
-  het_hist <- ggplot(tempdata, aes_string(x = het_p_col)) +
-    geom_histogram() +
-    xlab(paste("all", method, "het_mlogp", sep = "_")) +
-    theme_bw() +
-    theme(axis.title = element_text(size = 7),
-          axis.text = element_text(size = 7))
+  # tempdata <- -log10(na.omit(ref_hits[, ..het_p_col]))
+  # het_hist <- ggplot(tempdata, aes_string(x = het_p_col)) +
+  #   geom_histogram() +
+  #   xlab(paste("all", method, "het_mlogp", sep = "_")) +
+  #   theme_bw() +
+  #   theme(axis.title = element_text(size = 7),
+  #         axis.text = element_text(size = 7))
   
   # P-value comparison histogram
   p_cols <- c(meta_pval_col, study_pval_cols[1])
-  tempdata <- -log10(na.omit(ref_hits[, ..p_cols]))
+  tempdata <- -log10(ref_hits[, ..p_cols])
   diff <- data.table(tempdata[[1]] - tempdata[[2]])
-  pval_hist <- ggplot(diff, aes(x = V1)) + 
-    geom_histogram() +
-    xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-    geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+  tempdata <- na.omit(cbind(diff, ref_hits[[af_cols[1]]] < 0.01))
+  tempdata[, V2 := ifelse(V2, "AF<0.01", "AF>=0.01")]
+  pval_hist <- ggplot(tempdata, aes(x = V1, fill = V2)) + 
+    geom_histogram(alpha = 0.6, position = "identity") +
+    scale_fill_manual(values=c("#ca0020", "#0571b0")) +
+    labs(x = paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp"),
+         fill = element_blank()) +
     theme_bw() +
     theme(axis.title = element_text(size = 7),
           axis.text = element_text(size = 7))
@@ -339,11 +342,14 @@ for (pval_thresh_i in pval_thresh) {
     p_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
     tempdata <- -log10(ref_hits[, ..p_cols])
     loo_hists <- lapply(2:length(p_cols), function(i) {
-      diff <- na.omit(data.table(tempdata[[i]] - tempdata[[1]]))
-      p <- ggplot(diff, aes(x = V1)) +
-        geom_histogram() +
-        xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-        geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+      diff <- data.table(tempdata[[i]] - tempdata[[1]])
+      tempdata <- na.omit(cbind(diff, ref_hits[[af_cols[1]]] < 0.01))
+      tempdata[, V2 := ifelse(V2, "AF<0.01", "AF>=0.01")]
+      p <- ggplot(tempdata, aes(x = V1, fill = V2)) +
+        geom_histogram(alpha = 0.6, position = "identity") +
+        scale_fill_manual(values=c("#ca0020", "#0571b0")) +
+        labs(x = paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp"),
+             fill = element_blank()) +
         theme_bw() +
         theme(axis.title = element_text(size = 7),
               axis.text = element_text(size = 7))
@@ -353,7 +359,8 @@ for (pval_thresh_i in pval_thresh) {
   
   pval_plots_arranged <- ggarrange(plotlist = pval_plots, common.legend = T, legend = "bottom", nrow = 1)
   beta_plots_arranged <- ggarrange(plotlist = beta_plots, legend = "none", nrow = 1)
-  hists_arranged <- ggarrange(het_hist, pval_hist, legend = "none", nrow = 1)
+  #hists_arranged <- ggarrange(het_hist, pval_hist, legend = "none", nrow = 1)
+  hists_arranged <- ggarrange(pval_hist, legend = "right", nrow = 1)
   
   plotlist <- list(pval_plots_arranged, beta_plots_arranged, hists_arranged)
   
