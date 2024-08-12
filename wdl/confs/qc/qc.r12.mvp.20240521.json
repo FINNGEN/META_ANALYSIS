@@ -1,0 +1,9 @@
+{
+  "meta_qc.sumstats_loc": "gs://fg-mvp/meta_analysis_results/meta_filtered_sumstats.loc",
+  "meta_qc.pheno_confs": "gs://fg-mvp/confs/conf_jsons.txt",
+  "meta_qc.plots.pval_thresholds": "5e-10,5e-8,5e-7,5e-6",
+  "meta_qc.plots.pvals_to_plot": "all_inv_var_meta_p,all_inv_var_het_p,leave_FINNGEN_inv_var_meta_p,leave_UKBB_inv_var_meta_p,leave_MVP_inv_var_meta_p",
+  "meta_qc.plots.af_col_suffix": "_af_alt",
+  "meta_qc.plots.loglog_ylim": 20,
+  "meta_qc.docker": "eu.gcr.io/finngen-refinery-dev/meta:2024.05.21"
+}

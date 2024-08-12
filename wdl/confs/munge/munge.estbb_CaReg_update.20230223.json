@@ -1,0 +1,23 @@
+{
+    "munge.sumstats_loc": "gs://estonia_sumstats/February-2023/feb_2023_sumstats.txt",
+    "munge.clean_filter.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "munge.clean_filter.chr_col": "CHROM",
+    "munge.clean_filter.pos_col": "GENPOS",
+    "munge.clean_filter.ref_col": "ALLELE0",
+    "munge.clean_filter.alt_col": "ALLELE1",
+    "munge.clean_filter.af_col": "A1FREQ",
+    "munge.clean_filter.beta_col": "BETA",
+    "munge.clean_filter.se_col": "SE",
+    "munge.clean_filter.pval_col": "p.value",
+    "munge.sumstat_to_vcf.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "munge.lift.docker": "eu.gcr.io/finngen-refinery-dev/picard:2.25.6",
+    "munge.lift.chainfile": "gs://juham-fg/lift/chainfiles/hg19ToHg38.over.chain.gz",
+    "munge.lift.b38_assembly_fasta": "gs://juham-fg/lift/broad/Homo_sapiens_assembly38.fasta",
+    "munge.lift.b38_assembly_dict": "gs://juham-fg/lift/broad/Homo_sapiens_assembly38.dict",
+    "munge.lift_postprocess.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
+    "munge.harmonize.docker": "eu.gcr.io/finngen-refinery-dev/meta:devel",
+    "munge.harmonize.gnomad_ref": "gs://gnomad3/genomes_3.0/ref/filter/gnomad_v3_b38_ref_nfe.gz",
+    "munge.harmonize.options": "--gnomad_max_abs_diff 0.2 --pre_aligned",
+    "munge.plot.docker": "eu.gcr.io/finngen-refinery-dev/meta:devel",
+    "munge.plot.loglog_ylim": 20
+}
