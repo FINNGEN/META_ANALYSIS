@@ -376,7 +376,7 @@ task gather_qc {
         files_list <- split(files, gsub(".*[.]qc[.]|[.]tsv", "", files))
 
         merged_list <- lapply(files_list, function(x) {
-            do.call(rbind, lapply(x, fread))
+            do.call(rbind, c(lapply(x, fread), fill = T))
         })
 
         for(i in names(merged_list)) {
