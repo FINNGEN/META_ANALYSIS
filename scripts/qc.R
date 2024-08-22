@@ -141,7 +141,6 @@ for (pval_thresh_i in pval_thresh) {
   sig_loc_list <- list()
   for (pval_col in pval_cols) {
     tempdata <- DATA[DATA[[pval_col]] < pval_thresh_i]
-    n_sig_loci <- 0
     message("Finding significant loci according to \"", pval_col, "\"")
     while (nrow(tempdata) > 0) {
       maxrow <- tempdata[which.min(tempdata[[pval_col]])]
@@ -166,13 +165,13 @@ for (pval_thresh_i in pval_thresh) {
         }
       }
       tempdata <- tempdata[! in_region]
-      n_sig_loci <- n_sig_loci + 1
       if (is.null(sig_loc_list[[pval_col]])) {
         sig_loc_list[[pval_col]] <- maxrow
       } else {
         sig_loc_list[[pval_col]] <- rbind(sig_loc_list[[pval_col]], maxrow)
       }
     }
+    n_sig_loci <- ifelse(is.null(sig_loc_list[[pval_col]]), 0, nrow(sig_loc_list[[pval_col]]))
     message("Found ", n_sig_loci, " significant loci.")
     qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := n_sig_loci]
   }
