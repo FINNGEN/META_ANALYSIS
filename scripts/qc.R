@@ -181,7 +181,10 @@ for (pval_thresh_i in pval_thresh) {
   }
   rm(tempdata)
   
-  if (! is.null(with_more_than1_hit)) {
+  # Check only individual study stats
+  with_more_than1_hit <- with_more_than1_hit[! with_more_than1_hit %in% meta_pval_cols]
+  
+  if (length(with_more_than1_hit) > 0) {
     ref_pval_col <- study_pval_cols[study_pval_cols %in% with_more_than1_hit][1]
   } else {
     ref_pval_col <- study_pval_cols[1]
