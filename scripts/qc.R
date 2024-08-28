@@ -181,16 +181,9 @@ for (pval_thresh_i in pval_thresh) {
   }
   rm(tempdata)
   
-  # Check only individual study stats
-  with_more_than1_hit <- with_more_than1_hit[! with_more_than1_hit %in% meta_pval_cols]
-  
-  if (length(with_more_than1_hit) > 0) {
-    ref_pval_col <- study_pval_cols[study_pval_cols %in% with_more_than1_hit][1]
-  } else {
-    ref_pval_col <- study_pval_cols[1]
-  }
-  ref_hits <- sig_loc_list[[ref_pval_col]]
-  ref_study <- studies[startsWith(ref_pval_col, prefix = studies)]
+  # Use first study / meta-study in list as reference for hits
+  ref_hits <- sig_loc_list[[c(with_more_than1_hit, study_pval_cols[1])[1]]]
+  ref_study <- studies[1]
   ref_beta_col <- study_beta_cols[startsWith(study_beta_cols, prefix = ref_study)]
   ref_sebeta_col <- study_sebeta_cols[startsWith(study_sebeta_cols, prefix = ref_study)]
   ref_af_col <- af_cols[startsWith(af_cols, prefix = ref_study)]
