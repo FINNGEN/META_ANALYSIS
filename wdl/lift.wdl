@@ -100,7 +100,15 @@ task sumstat_to_vcf {
                 s = {i:v for i,v in enumerate(s)}
                 s = defaultdict(lambda: '.', s)
 
-                chr = str(s[h_idx[chr_col]]).replace('chr', '').replace('X', '23').replace('Y', '24').replace('M', '25').replace('MT', '25')
+                chr = str(s[h_idx[chr_col]])
+                if chr == '23':
+                    chr = 'X'
+                if chr == '24':
+                    chr = 'Y'
+                if chr == '25':
+                    chr = 'M'
+                if chr[:3] != 'chr':
+                    chr = 'chr' + chr
 
                 pos = s[h_idx[pos_col]]
                 ref = s[h_idx[ref_col]]
@@ -222,8 +230,8 @@ task lift_postprocess {
         pos_col = "~{pos_col}"
         ref_col = "~{ref_col}"
         alt_col = "~{alt_col}"
-        af_col = ~{if defined(af_col) then "'~{af_col}'" else None}
-        beta_col = ~{if defined(beta_col) then "'~{beta_col}'" else None}
+        af_col = ~{if defined(af_col) then "'~{af_col}'" else "None"}
+        beta_col = ~{if defined(beta_col) then "'~{beta_col}'" else "None"}
 
         s_f = gzip.open(sumstat, 'rt')
         sumstat_header = s_f.readline().strip().split(delim)
