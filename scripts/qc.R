@@ -186,6 +186,7 @@ for (pval_thresh_i in pval_thresh) {
   ref_study <- studies[1]
   ref_beta_col <- study_beta_cols[startsWith(study_beta_cols, prefix = ref_study)]
   ref_sebeta_col <- study_sebeta_cols[startsWith(study_sebeta_cols, prefix = ref_study)]
+  ref_pval_col <- study_pval_cols[startsWith(study_pval_cols, prefix = ref_study)]
   ref_af_col <- af_cols[startsWith(af_cols, prefix = ref_study)]
   
   non_ref_studies <- studies[studies != ref_study]
