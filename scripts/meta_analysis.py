@@ -683,6 +683,8 @@ def run():
 
     outfile = args.path_to_res
 
+    n_meta_cols = 5 if args.is_het_test else 4
+
     with open( outfile, 'w' ) as out:
 
         out.write("\t".join(["#CHR","POS","REF","ALT","SNP"]))
@@ -748,15 +750,9 @@ def run():
             met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
             for m in met:
                 if m is not None:
-                    if args.is_het_test:
-                        outdat.extend([format_num(num) for num in m[0:5]])
-                    else:
-                        outdat.extend([format_num(num) for num in m[0:4]])
+                    outdat.extend([format_num(num) for num in m[0:n_meta_cols]])
                 else:
-                    if args.is_het_test:
-                        outdat.extend(['NA'] * 5)
-                    else:
-                        outdat.extend(['NA'] * 4)
+                    outdat.extend(['NA'] * n_meta_cols)
 
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
@@ -766,20 +762,11 @@ def run():
                         met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
                             if m is not None:
-                                if args.is_het_test:
-                                    outdat.extend([format_num(num) for num in m[0:5]])
-                                else:
-                                    outdat.extend([format_num(num) for num in m[0:4]])
+                                outdat.extend([format_num(num) for num in m[0:n_meta_cols]])
                             else:
-                                if args.is_het_test:
-                                    outdat.extend(['NA'] * 5)
-                                else:
-                                    outdat.extend(['NA'] * 4)
+                                outdat.extend(['NA'] * n_meta_cols)
                     else:
-                        if args.is_het_test:
-                            outdat.extend(['NA'] * 5 * len(methods))
-                        else:
-                            outdat.extend(['NA'] * 4 * len(methods))
+                        outdat.extend(['NA'] * n_meta_cols * len(methods))
 
             out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
