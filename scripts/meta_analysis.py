@@ -551,6 +551,9 @@ def get_studies(conf:str, chrom, sep, flip_indels) -> List[Study]:
 
     return [ Study(s, chrom, sep, flip_indels) for s in studies_conf["meta"]]
 
+def format_num(num, precision=2):
+    return "NA" if num is None or numpy.isnan(num) else numpy.format_float_scientific(num, precision=precision)
+
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[Tuple] :
     '''
         Computes meta-analysis between all studies and data given in the std_list
@@ -567,16 +570,13 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     for m in met:
         if m is not None:
             if is_het_test:
-                meta_res.append((m[0], m[1], m[2], m[3], het_test(m[4], m[5], m[0])))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2), het_test(m[4], m[5], m[0])))
             else:
-                meta_res.append((m[0], m[1], m[2], m[3]))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2)))
         else:
             meta_res.append(None)
 
     return meta_res
-
-def format_num(num, precision=2):
-    return "NA" if num is None or numpy.isnan(num) else numpy.format_float_scientific(num, precision=precision)
 
 def get_next_variant( studies : List[Study]) -> List[VariantData]:
     '''
@@ -739,7 +739,7 @@ def run():
                     if next_var[0] is not None:
                         met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods, is_het_test=False)
                         for m in met:
-                            outdat.extend([format_num(num) for num in m[0:4]])
+                            outdat.extend(m)
                     else:
                         outdat.extend(["NA"] * len(methods) * 4)
                 else:
@@ -750,7 +750,7 @@ def run():
             met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
             for m in met:
                 if m is not None:
-                    outdat.extend([format_num(num) for num in m[0:n_meta_cols]])
+                    outdat.extend(m)
                 else:
                     outdat.extend(['NA'] * n_meta_cols)
 
@@ -762,7 +762,7 @@ def run():
                         met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
                             if m is not None:
-                                outdat.extend([format_num(num) for num in m[0:n_meta_cols]])
+                                outdat.extend(m)
                             else:
                                 outdat.extend(['NA'] * n_meta_cols)
                     else:
