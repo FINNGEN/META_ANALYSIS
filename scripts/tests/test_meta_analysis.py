@@ -9,28 +9,6 @@ from meta_analysis import het_test, n_meta, inv_var_meta, variance_weight_meta, 
 
 class TestMetaAnalysis(unittest.TestCase):
 
-    test_study1 = MagicMock(spec=Study)
-    test_study1.n_cases = 1000
-    test_study1.n_controls = 10000
-    test_study1.effective_size = (4 * test_study1.n_cases *  test_study1.n_controls  ) / ( test_study1.n_cases+  test_study1.n_controls )
-
-    test_study2 = MagicMock(spec=Study)
-    test_study2.n_cases = 2500
-    test_study2.n_controls = 50000
-    test_study2.effective_size = (4 * test_study2.n_cases *  test_study2.n_controls  ) / ( test_study2.n_cases+  test_study2.n_controls )
-
-    test_variant1 = MagicMock(spec=VariantData)
-    test_variant1.beta = 1.95e-01
-    test_variant1.se = 1.02e-02
-    test_variant1.pval = 1.69e-81
-    test_variant1.z_score = math.sqrt(chi2.isf(test_variant1.pval, df=1))
-    
-    test_variant2 = MagicMock(spec=VariantData)
-    test_variant2.beta = 2.13e-01
-    test_variant2.se = 6.72e-03
-    test_variant2.pval = 1.11e-308
-    test_variant2.z_score = math.sqrt(chi2.isf(test_variant2.pval, df=1))
-
     def assertListAlmostEqual(self, list1, list2, places=5):
         """
         Helper method to assert that two lists of floats are almost equal.
@@ -84,12 +62,12 @@ class TestMetaAnalysis(unittest.TestCase):
         result = n_meta(studies)
 
         expected_beta_meta = 0.5  # sum_betas / sum_weights = 0.5*10 /10 =0.5
-        self.assertEqual(result.beta, expected_beta_meta)
-        self.assertIsNone(result.sebeta)  # SE is None
-        self.assertTrue(0 <= result.pval <=1)  # p-value between 0 and 1
-        self.assertIsNotNone(result.mlogp)  # log10 p-value
-        self.assertEqual(result.orig_betas, [0.5])  # effs_size_org
-        self.assertEqual(result.weights, [10.0])  # weights
+        self.assertEqual(result[0], expected_beta_meta)
+        self.assertIsNone(result[1])  # SE is None
+        self.assertTrue(0 <= result[2] <=1)  # p-value between 0 and 1
+        self.assertIsNotNone(result[3])  # log10 p-value
+        self.assertEqual(result[4], [0.5])  # effs_size_org
+        self.assertEqual(result[5], [10.0])  # weights
 
     def test_inv_var_meta_no_se(self):
         """
@@ -123,11 +101,11 @@ class TestMetaAnalysis(unittest.TestCase):
         expected_beta_meta = variant.beta  # 0.5
         expected_se_meta = np.sqrt(1 / expected_inv_var)  # 0.1
 
-        self.assertAlmostEqual(result.beta, expected_beta_meta, places=5)
-        self.assertAlmostEqual(result.sebeta, expected_se_meta, places=5)
-        self.assertTrue(0 <= result.pval <= 1)  # p-value between 0 and 1
-        self.assertIsNotNone(result.mlogp)  # log10 p-value
-        self.assertEqual(result.orig_betas, [0.5])  # effs_size_org
+        self.assertAlmostEqual(result[0], expected_beta_meta, places=5)
+        self.assertAlmostEqual(result[1], expected_se_meta, places=5)
+        self.assertTrue(0 <= result[2] <= 1)  # p-value between 0 and 1
+        self.assertIsNotNone(result[3])  # log10 p-value
+        self.assertEqual(result[4], [0.5])  # effs_size_org
 
         # Use the helper method for weights
         self.assertListAlmostEqual(result[5], [100.0], places=5)  # weights
@@ -171,12 +149,12 @@ class TestMetaAnalysis(unittest.TestCase):
         expected_beta_meta = (inv_var1 * variant1.beta + inv_var2 * variant2.beta) / sum_weights
         expected_beta_meta = (19.6 * 0.5 + 9.8 * 0.3) / 29.4
 
-        self.assertAlmostEqual(result.beta, expected_beta_meta, places=5)
-        self.assertIsNone(result.sebeta)  # SE is None
-        self.assertTrue(0 <= result.pval <=1)  # p-value
-        self.assertIsNotNone(result.mlogp)  # log10 p-value
-        self.assertEqual(result.orig_betas, [0.5, 0.3])  # effs_size_org
-        self.assertEqual(result.weights, [19.6, 9.8])  # weights
+        self.assertAlmostEqual(result[0], expected_beta_meta, places=5)
+        self.assertIsNone(result[1])  # SE is None
+        self.assertTrue(0 <= result[2] <=1)  # p-value
+        self.assertIsNotNone(result[3])  # log10 p-value
+        self.assertEqual(result[4], [0.5, 0.3])  # effs_size_org
+        self.assertEqual(result[5], [19.6, 9.8])  # weights
 
     def test_n_meta_mismatched_lengths(self):
         """
