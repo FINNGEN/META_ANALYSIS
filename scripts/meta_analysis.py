@@ -2,7 +2,6 @@
 import argparse
 import json
 import gzip
-from collections import namedtuple
 import sys
 import math
 from scipy.stats import chi2
@@ -13,18 +12,12 @@ import subprocess
 from collections import deque
 import re
 
-chrord = { "chr"+str(chr):int(chr) for chr in list(range(1,23))}
-chrord["X"] = 23
-chrord["Y"] = 24
-chrord["MT"] = 25
-chrord["chrX"] = 23
-chrord["chrY"] = 24
-chrord["chrMT"] = 25
-chrord.update({str(chr):int(chr) for chr in list(range(1,25)) } )
-chrord.update({int(chr):int(chr) for chr in list(range(1,25)) } )
+chrord = {"chr"+str(chr): chr for chr in range(1, 23)}
+chrord.update({"X": 23, "Y": 24, "MT": 25, "chrX": 23, "chrY": 24, "chrMT": 25})
+chrord.update({str(chr): chr for chr in range(1, 25)})
+chrord.update({chr: chr for chr in range(1, 25)})
 
 re_allele = re.compile('^[ATCG]+$', re.IGNORECASE)
-
 
 def het_test( effs_sizes: List[float], weights: List[float], effs_size_meta: float) -> float:
     '''
@@ -71,13 +64,15 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
         effs_size_org.append(dat.beta)
 
     beta_meta=sum_betas/sum_weights
+
+    z_val_abs = abs(sum(effs_size)) / math.sqrt(tot_size)
     
     #TODO se
     return (
         beta_meta,
         None,
-        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )),
-        -(scipy.stats.norm.logsf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ) + math.log(2)) / math.log(10),
+        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(z_val_abs)),
+        -(scipy.stats.norm.logsf(z_val_abs) + math.log(2)) / math.log(10),
         effs_size_org,
         weights
     ) if len(effs_size)==len(studies) else None
@@ -112,12 +107,14 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
         effs_size_org.append(dat.beta)
 
     beta_meta=sum(effs_inv_var)/ sum_inv_var
+
+    z_val_abs = abs(sum(effs_inv_var) / math.sqrt(sum_inv_var))
     
     return (
         beta_meta,
         math.sqrt(1/sum_inv_var),
-        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))),
-        -(scipy.stats.norm.logsf( abs(sum(effs_inv_var) / math.sqrt(sum_inv_var)) ) + math.log(2)) / math.log(10),
+        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(z_val_abs)),
+        -(scipy.stats.norm.logsf(z_val_abs) + math.log(2)) / math.log(10),
         effs_size_org,
         weights
     )
@@ -155,17 +152,18 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tupl
         effs_size_org.append(dat.beta)
 
     beta_meta=sum_betas / sum_weights
+
+    z_val_abs = abs(sum(effs_se)) / math.sqrt(tot_se)
     
     #TODO SE
     return (
         beta_meta,
         None,
-        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))),
-        -(scipy.stats.norm.logsf( abs( sum( effs_se ) ) /  math.sqrt(tot_se) ) + math.log(2)) / math.log(10),
+        max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(z_val_abs)),
+        -(scipy.stats.norm.logsf(z_val_abs) + math.log(2)) / math.log(10),
         effs_size_org,
         weights
     )
-    
 
 SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
 
@@ -451,8 +449,6 @@ class Study:
             pos = l[self.conf["h_idx"]["pos"]]
             eff = l[self.conf["h_idx"]["effect"]]
             pval = l[self.conf["h_idx"]["pval"]]
-
-            pos = int(float(pos))
 
             se = l[self.conf["h_idx"]["se"]] if "se" in self.conf["h_idx"] else None
 
