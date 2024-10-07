@@ -25,6 +25,7 @@ chrord.update({int(chr):int(chr) for chr in list(range(1,25)) } )
 
 re_allele = re.compile('^[ATCG]+$', re.IGNORECASE)
 
+MetaResult = namedtuple("MetaResult", ["beta", "sebeta", "pval", "mlogp", "orig_betas", "weights", "het_test"], defaults=(None, ))
 
 def het_test( effs_sizes: List[float], weights: List[float], effs_size_meta: float) -> float:
     '''
@@ -45,21 +46,21 @@ def het_test( effs_sizes: List[float], weights: List[float], effs_size_meta: flo
 
     return scipy.stats.distributions.chi2.sf(sum_eff_dev, k-1)
 
-def n_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
+def n_meta( studies : List[Tuple['Study','VariantData']] ) -> MetaResult:
     '''
         Computes sample size weighted meta-analysis for variants in studies
         input:
             studies: studies and data in tuples
         output:
-            tuple with results from meta-analysis or None
+            MetaResult tuple with results from meta-analysis
     '''
     weights = []
-    effs_size_org = [] 
+    effs_size_org = []
 
     effs_size = []
-    tot_size =0
-    sum_betas=0
-    sum_weights=0
+    tot_size = 0
+    sum_betas = 0
+    sum_weights = 0
     for s in studies:
         study = s[0]
         dat = s[1]
@@ -73,23 +74,23 @@ def n_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
     beta_meta=sum_betas/sum_weights
     
     #TODO se
-    return (
+    return ( MetaResult(
         beta_meta,
         None,
         max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_size ) ) / math.sqrt(tot_size) )),
         -(scipy.stats.norm.logsf( abs( sum( effs_size ) ) / math.sqrt(tot_size) ) + math.log(2)) / math.log(10),
         effs_size_org,
         weights
-    ) if len(effs_size)==len(studies) else None
+    ))
 
 
-def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
+def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> MetaResult:
     '''
         Computes inverse-variance weighted meta-analysis for variants in studies
         input:
             studies: studies and data in tuples
         output:
-            tuple with results from meta-analysis or None
+            MetaResult tuple with results from meta-analysis
     '''
     weights = []
     effs_size_org = []
@@ -113,23 +114,23 @@ def inv_var_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
 
     beta_meta=sum(effs_inv_var)/ sum_inv_var
     
-    return (
+    return ( MetaResult(
         beta_meta,
         math.sqrt(1/sum_inv_var),
         max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf(abs(sum(effs_inv_var) / math.sqrt(sum_inv_var) ))),
         -(scipy.stats.norm.logsf( abs(sum(effs_inv_var) / math.sqrt(sum_inv_var)) ) + math.log(2)) / math.log(10),
         effs_size_org,
         weights
-    )
+    ))
 
 
-def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tuple:
+def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> MetaResult:
     '''
         Computes variance weighted meta-analysis for variants in studies
         input:
             studies: studies and data in tuples
         output:
-            tuple with results from meta-analysis or None
+            MetaResult tuple with results from meta-analysis
     '''
     weights = []
     effs_size_org = []
@@ -157,17 +158,15 @@ def variance_weight_meta( studies : List[Tuple['Study','VariantData']] ) -> Tupl
     beta_meta=sum_betas / sum_weights
     
     #TODO SE
-    return (
+    return ( MetaResult(
         beta_meta,
         None,
         max(sys.float_info.min * sys.float_info.epsilon, 2 * scipy.stats.norm.sf( abs( sum( effs_se ) ) /  math.sqrt(tot_se))),
         -(scipy.stats.norm.logsf( abs( sum( effs_se ) ) /  math.sqrt(tot_se) ) + math.log(2)) / math.log(10),
         effs_size_org,
         weights
-    )
-    
+    ))
 
-SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
 
 def check_eff_field(field):
     if field.lower() in ["beta","or"]:
@@ -551,6 +550,8 @@ def get_studies(conf:str, chrom, sep, flip_indels) -> List[Study]:
 
     return [ Study(s, chrom, sep, flip_indels) for s in studies_conf["meta"]]
 
+SUPPORTED_METHODS = {"n":n_meta,"inv_var":inv_var_meta,"variance":variance_weight_meta}
+
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[Tuple] :
     '''
         Computes meta-analysis between all studies and data given in the std_list
@@ -567,9 +568,20 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     for m in met:
         if m is not None:
             if is_het_test:
-                meta_res.append((m[0], m[1], m[2], m[3], het_test(m[4], m[5], m[0])))
+                meta_res.append((
+                    format_num(m.beta),
+                    format_num(m.sebeta),
+                    format_num(m.pval),
+                    str(numpy.round(m.mlogp, 2)),
+                    format_num(het_test(m.orig_betas, m.weights, m.beta))
+                ))
             else:
-                meta_res.append((m[0], m[1], m[2], m[3]))
+                meta_res.append((
+                    format_num(m.beta),
+                    format_num(m.sebeta),
+                    format_num(m.pval),
+                    str(numpy.round(m.mlogp, 2))
+                ))
         else:
             meta_res.append(None)
 
@@ -739,7 +751,7 @@ def run():
                     if next_var[0] is not None:
                         met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods, is_het_test=False)
                         for m in met:
-                            outdat.extend([format_num(num) for num in m[0:4]])
+                            outdat.extend([num for num in m[0:4]])
                     else:
                         outdat.extend(["NA"] * len(methods) * 4)
                 else:
@@ -750,7 +762,7 @@ def run():
             met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
             for m in met:
                 if m is not None:
-                    outdat.extend([format_num(num) for num in m[0:n_meta_cols]])
+                    outdat.extend([num for num in m[0:n_meta_cols]])
                 else:
                     outdat.extend(['NA'] * n_meta_cols)
 
@@ -762,7 +774,7 @@ def run():
                         met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
                         for m in met:
                             if m is not None:
-                                outdat.extend([format_num(num) for num in m[0:n_meta_cols]])
+                                outdat.extend([num for num in m[0:n_meta_cols]])
                             else:
                                 outdat.extend(['NA'] * n_meta_cols)
                     else:
