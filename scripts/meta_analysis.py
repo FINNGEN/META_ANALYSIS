@@ -570,7 +570,7 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     for m in met:
         if m is not None:
             if is_het_test:
-                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2), het_test(m[4], m[5], m[0])))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2), format_num(het_test(m[4], m[5], m[0]))))
             else:
                 meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2)))
         else:
