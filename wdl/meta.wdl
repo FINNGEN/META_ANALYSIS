@@ -49,8 +49,7 @@ workflow meta_analysis {
             input:
                 meta_file = post_filter.filtered_meta_out,
                 conf = pheno_conf[i],
-                pheno = pheno,
-                docker = docker
+                pheno = pheno
         }
 
     }
