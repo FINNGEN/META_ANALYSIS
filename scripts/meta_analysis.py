@@ -711,9 +711,10 @@ def run():
                 if args.is_het_test:
                     header.append(f"leave_{s.name}_{m}_meta_het_p")
 
-    with open(outfile, 'w') as out:
+    with open(outfile, 'wb') as raw:
+        with bgzip.BGZipWriter(raw) as out:
 
-        out.write("\t".join(header) + "\n")
+        out.write(str.encode("\t".join(header) + "\n"))
 
         next_var = get_next_variant(studs)
         if not args.quiet:
@@ -768,7 +769,7 @@ def run():
                     else:
                         outdat.extend(['NA'] * n_meta_cols * len(methods))
 
-            out.write( "\t".join(map(str, outdat)) + "\n" )
+            out.write( str.encode("\t".join(map(str, outdat)) + "\n" ))
 
             next_var = get_next_variant(studs)
             if not args.quiet:
@@ -777,7 +778,7 @@ def run():
                     print(v)
             matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
-    subprocess.run(["bgzip","--force",args.path_to_res])
+    #subprocess.run(["bgzip","--force",args.path_to_res])
     subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res + ".gz"])
 
 
