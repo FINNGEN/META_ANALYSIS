@@ -635,7 +635,7 @@ def validate_methods(methods, studies):
         if m not in SUPPORTED_METHODS:
             raise Exception("Unsupported meta method" + m + " given. Supported values" + ",".join(SUPPORTED_METHODS))
         if m in ["inv_var", "variance"]:
-            for s in studs:
+            for s in studies:
                 if not s.has_std_err():
                     raise Exception("Variance based method requested but not all studies have se column specified.")
         M.append(m)
