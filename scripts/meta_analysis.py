@@ -11,6 +11,7 @@ from typing import Dict, Tuple, List
 import subprocess
 from collections import deque
 import re
+import bgzip
 
 chrord = {"chr"+str(chr): chr for chr in range(1, 23)}
 chrord.update({"X": 23, "Y": 24, "MT": 25, "chrX": 23, "chrY": 24, "chrMT": 25})
