@@ -676,35 +676,44 @@ def run():
     studs = get_studies(args.config_file, args.chrom, args.sep, args.flip_indels)
     methods = validate_methods(args.methods, studs)
 
+    outfile = args.path_to_res
     n_meta_cols = 5 if args.is_het_test else 4
 
-    with open(args.path_to_res, 'w') as out:
+    # Build header
+    header = ["#CHR", "POS", "REF", "ALT", "SNP"]
+    for i, s in enumerate(studs):
+        header.extend([f"{s.name}_beta", f"{s.name}_sebeta", f"{s.name}_pval"])
+        if s.extra_cols:
+            header.extend([f"{s.name}_{c}" for c in s.extra_cols])
+        if args.pairwise_with_first and i > 0:
+            for m in methods:
+                prefix = f"{studs[0].name}_{s.name}_{m}_meta"
+                header.extend([f"{prefix}_beta", f"{prefix}_sebeta", f"{prefix}_p", f"{prefix}_mlogp"])
+    
+    # All meta-analysis columns
+    header.append("all_meta_N")
+    for m in methods:
+        header.extend([f"all_{m}_meta_beta", f"all_{m}_meta_sebeta", f"all_{m}_meta_p", f"all_{m}_meta_mlogp"])
+        if args.is_het_test:
+            header.append(f"all_{m}_het_p")
+    
+    # Leave-one-out meta-analysis columns
+    if args.leave_one_out:
+        for s in studs:
+            header.append(f"leave_{s.name}_N")
+            for m in methods:
+                header.extend([
+                    f"leave_{s.name}_{m}_meta_beta",
+                    f"leave_{s.name}_{m}_meta_sebeta",
+                    f"leave_{s.name}_{m}_meta_p",
+                    f"leave_{s.name}_{m}_meta_mlogp"
+                ])
+                if args.is_het_test:
+                    header.append(f"leave_{s.name}_{m}_meta_het_p")
 
-        out.write("\t".join(["#CHR","POS","REF","ALT","SNP"]))
+    with open(outfile, 'w') as out:
 
-        ## align to leftmost STUDY
-        for i,s in enumerate(studs):
-            out.write( "\t" +  "\t".join( [ s.name + "_beta", s.name + "_sebeta", s.name + "_pval"] ))
-            out.write( ("\t" if len(s.extra_cols) else "") + "\t".join( [s.name + "_" + c for c in s.extra_cols] ) )
-            if args.pairwise_with_first and i>0:
-                for m in methods:
-                    out.write("\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_p\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_mlogp")
-
-        out.write("\tall_meta_N")
-        for m in methods:
-            out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp")
-            if args.is_het_test:
-                out.write("\tall_" + m + "_het_p")
-
-        if args.leave_one_out:
-            for s in studs:
-                out.write("\t" + "leave_" + s.name + "_N")
-                for m in methods:
-                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp"] ))
-                    if args.is_het_test:
-                        out.write("\tleave_" + s.name + "_" + m + "_meta_het_p")
-
-        out.write("\n")
+        out.write("\t".join(header) + "\n")
 
         next_var = get_next_variant(studs)
         if not args.quiet:
@@ -716,9 +725,7 @@ def run():
         while len(matching_studies)>0:
 
             d = matching_studies[0][1]
-            outdat = [ d.chr, d.pos, d.ref, d.alt]
-            v = "{}:{}:{}:{}".format(*outdat)
-            outdat.append(v)
+            outdat = [d.chr, d.pos, d.ref, d.alt, f"{d.chr}:{d.pos}:{d.ref}:{d.alt}"]
 
             for i,_ in enumerate(studs):
                 if next_var[i] is not None:
@@ -761,7 +768,7 @@ def run():
                     else:
                         outdat.extend(['NA'] * n_meta_cols * len(methods))
 
-            out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
+            out.write( "\t".join(map(str, outdat)) + "\n" )
 
             next_var = get_next_variant(studs)
             if not args.quiet:
