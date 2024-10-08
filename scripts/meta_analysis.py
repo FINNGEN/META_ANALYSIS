@@ -11,7 +11,6 @@ from typing import Dict, Tuple, List
 import subprocess
 from collections import deque
 import re
-import bgzip
 
 chrord = {"chr"+str(chr): chr for chr in range(1, 23)}
 chrord.update({"X": 23, "Y": 24, "MT": 25, "chrX": 23, "chrY": 24, "chrMT": 25})
@@ -679,34 +678,90 @@ def run():
 
     n_meta_cols = 5 if args.is_het_test else 4
 
-    with open(args.path_to_res, 'wb') as raw:
-        with bgzip.BGZipWriter(raw) as out:
+    with open(args.path_to_res, 'w') as out:
 
-            out.write("\t".join(["#CHR","POS","REF","ALT","SNP"]))
+        out.write("\t".join(["#CHR","POS","REF","ALT","SNP"]))
 
-            ## align to leftmost STUDY
-            for i,s in enumerate(studs):
-                out.write( "\t" +  "\t".join( [ s.name + "_beta", s.name + "_sebeta", s.name + "_pval"] ))
-                out.write( ("\t" if len(s.extra_cols) else "") + "\t".join( [s.name + "_" + c for c in s.extra_cols] ) )
-                if args.pairwise_with_first and i>0:
-                    for m in methods:
-                        out.write("\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_p\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_mlogp")
+        ## align to leftmost STUDY
+        for i,s in enumerate(studs):
+            out.write( "\t" +  "\t".join( [ s.name + "_beta", s.name + "_sebeta", s.name + "_pval"] ))
+            out.write( ("\t" if len(s.extra_cols) else "") + "\t".join( [s.name + "_" + c for c in s.extra_cols] ) )
+            if args.pairwise_with_first and i>0:
+                for m in methods:
+                    out.write("\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_beta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_sebeta\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_p\t" + studs[0].name + "_" + s.name + "_" +  m + "_meta_mlogp")
 
-            out.write("\tall_meta_N")
-            for m in methods:
-                out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp")
-                if args.is_het_test:
-                    out.write("\tall_" + m + "_het_p")
+        out.write("\tall_meta_N")
+        for m in methods:
+            out.write("\tall_" + m + "_meta_beta\tall_" + m + "_meta_sebeta\tall_" + m + "_meta_p\tall_" + m + "_meta_mlogp")
+            if args.is_het_test:
+                out.write("\tall_" + m + "_het_p")
+
+        if args.leave_one_out:
+            for s in studs:
+                out.write("\t" + "leave_" + s.name + "_N")
+                for m in methods:
+                    out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp"] ))
+                    if args.is_het_test:
+                        out.write("\tleave_" + s.name + "_" + m + "_meta_het_p")
+
+        out.write("\n")
+
+        next_var = get_next_variant(studs)
+        if not args.quiet:
+            print("NEXT VARIANTS")
+            for v in next_var:
+                print(v)
+        matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
+
+        while len(matching_studies)>0:
+
+            d = matching_studies[0][1]
+            outdat = [ d.chr, d.pos, d.ref, d.alt]
+            v = "{}:{}:{}:{}".format(*outdat)
+            outdat.append(v)
+
+            for i,_ in enumerate(studs):
+                if next_var[i] is not None:
+                    outdat.extend([format_num(next_var[i].beta), format_num(next_var[i].se), format_num(next_var[i].pval) ])
+                    outdat.extend([ c for c in next_var[i].extra_cols ])
+
+                    # meta analyse pairwise only with the leftmost study
+                    if not args.pairwise_with_first or i==0:
+                        continue
+
+                    if next_var[0] is not None:
+                        met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods, is_het_test=False)
+                        for m in met:
+                            outdat.extend(m)
+                    else:
+                        outdat.extend(["NA"] * len(methods) * 4)
+                else:
+                    outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*4 if args.pairwise_with_first and i>0 else 0) ) )
+
+            outdat.append( str(len(matching_studies)) )
+
+            met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
+            for m in met:
+                if m is not None:
+                    outdat.extend(m)
+                else:
+                    outdat.extend(['NA'] * n_meta_cols)
 
             if args.leave_one_out:
-                for s in studs:
-                    out.write("\t" + "leave_" + s.name + "_N")
-                    for m in methods:
-                        out.write( "\t" +  "\t".join( ["leave_" + s.name + "_" + m + "_meta_beta", "leave_" + s.name + "_" + m + "_meta_sebeta", "leave_" + s.name + "_" + m + "_meta_p", "leave_" + s.name + "_" + m + "_meta_mlogp"] ))
-                        if args.is_het_test:
-                            out.write("\tleave_" + s.name + "_" + m + "_meta_het_p")
+                for s,_ in enumerate(studs):
+                    matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
+                    outdat.append( str(len(matching_studies_loo)) )
+                    if len(matching_studies_loo) > 0:
+                        met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
+                        for m in met:
+                            if m is not None:
+                                outdat.extend(m)
+                            else:
+                                outdat.extend(['NA'] * n_meta_cols)
+                    else:
+                        outdat.extend(['NA'] * n_meta_cols * len(methods))
 
-            out.write("\n")
+            out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
 
             next_var = get_next_variant(studs)
             if not args.quiet:
@@ -715,64 +770,7 @@ def run():
                     print(v)
             matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
 
-            while len(matching_studies)>0:
-
-                d = matching_studies[0][1]
-                outdat = [ d.chr, d.pos, d.ref, d.alt]
-                v = "{}:{}:{}:{}".format(*outdat)
-                outdat.append(v)
-
-                for i,_ in enumerate(studs):
-                    if next_var[i] is not None:
-                        outdat.extend([format_num(next_var[i].beta), format_num(next_var[i].se), format_num(next_var[i].pval) ])
-                        outdat.extend([ c for c in next_var[i].extra_cols ])
-
-                        # meta analyse pairwise only with the leftmost study
-                        if not args.pairwise_with_first or i==0:
-                            continue
-
-                        if next_var[0] is not None:
-                            met = do_meta( [(studs[0],next_var[0]), (studs[i],next_var[i])], methods=methods, is_het_test=False)
-                            for m in met:
-                                outdat.extend(m)
-                        else:
-                            outdat.extend(["NA"] * len(methods) * 4)
-                    else:
-                        outdat.extend(['NA']  * (3 + len(studs[i].extra_cols) + (len(methods)*4 if args.pairwise_with_first and i>0 else 0) ) )
-
-                outdat.append( str(len(matching_studies)) )
-
-                met = do_meta( matching_studies, methods=methods, is_het_test=args.is_het_test )
-                for m in met:
-                    if m is not None:
-                        outdat.extend(m)
-                    else:
-                        outdat.extend(['NA'] * n_meta_cols)
-
-                if args.leave_one_out:
-                    for s,_ in enumerate(studs):
-                        matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
-                        outdat.append( str(len(matching_studies_loo)) )
-                        if len(matching_studies_loo) > 0:
-                            met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
-                            for m in met:
-                                if m is not None:
-                                    outdat.extend(m)
-                                else:
-                                    outdat.extend(['NA'] * n_meta_cols)
-                        else:
-                            outdat.extend(['NA'] * n_meta_cols * len(methods))
-
-                out.write( "\t".join([ str(o) for o in outdat]) + "\n" )
-
-                next_var = get_next_variant(studs)
-                if not args.quiet:
-                    print("NEXT VARIANTS")
-                    for v in next_var:
-                        print(v)
-                matching_studies = [(studs[i],v) for i,v in enumerate(next_var) if v is not None]
-
-    #subprocess.run(["bgzip","--force",args.path_to_res])
+    subprocess.run(["bgzip","--force",args.path_to_res])
     subprocess.run(["tabix","-s 1","-b 2","-e 2",args.path_to_res + ".gz"])
 
 
