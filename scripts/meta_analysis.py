@@ -631,7 +631,7 @@ def get_next_variant( studies : List[Study]) -> List[VariantData]:
 
 def validate_methods(methods, studies):
     M = []
-    for m in methods.split(","):
+    for m in methods:
         if m not in SUPPORTED_METHODS:
             raise Exception("Unsupported meta method" + m + " given. Supported values" + ",".join(SUPPORTED_METHODS))
         if m in ["inv_var", "variance"]:
