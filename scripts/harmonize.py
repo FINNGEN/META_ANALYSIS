@@ -5,9 +5,6 @@ import gzip
 import numpy
 from typing import Dict, Tuple, List
 
-flip = {'A':'T','C':'G','T':'A','G':'C'}
-
-
 class Variant():
 
     def __init__(self, chr, pos, ref, alt, af):
