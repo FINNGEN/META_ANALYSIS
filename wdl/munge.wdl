@@ -84,6 +84,7 @@ task clean_filter {
     }
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
+    Boolean do_filter = defined(filt_col) && defined(filt_threshold)
 
     command <<<
 
@@ -108,6 +109,7 @@ task clean_filter {
                 se_type=tolower("~{se_type}");
                 pval_type=tolower("~{pval_type}")
                 flip="~{flip_alleles}"
+                filter="~{do_filter}"
             }
             NR==1 {
                 for (i=1;i<=NF;i++) {
@@ -123,7 +125,7 @@ task clean_filter {
                     if ($i=="POS") pos=i
                 }
                 print $0
-            } NR>1 {
+            } NR>1 && filter=="true" && $a["~{filt_col}"] > ~{filt_threshold}{
                 if (effect_type=="or") {
                     $a["beta"]=log($a["beta"])
                 }
