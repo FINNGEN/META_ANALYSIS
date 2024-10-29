@@ -497,13 +497,14 @@ task harmonize {
 }
 
 # Make qc plots
-task plot {
+task filt {
 
     input {
         File sumstat_file
 
         String docker
         Int loglog_ylim
+        Float max_af_diff
     }
 
     String base = basename(sumstat_file)
@@ -518,14 +519,27 @@ task plot {
         require(ggplot2)
         require(data.table)
         options(bitmapType='cairo')
-        data <- fread("~{base}", select=c("#CHR", "POS", "pval", "af_gnomad", "af_alt"), header=T)
+        data <- fread("~{base}", select=c("af_gnomad", "af_alt"), header=T)
+        message(nrow(data[abs(af_alt - af_gnomad) > ~{max_af_diff}]), " variants will be filtered out with AF difference to GnomAD > ~{max_af_diff}")
         png("~{base}_AF.png", width=1000, height=1000, units="px")
-        p <- ggplot(data, aes_string(x="af_alt", y="af_gnomad")) +
+        p <- ggplot(data, aes(x = af_alt, y = af_gnomad, color = abs(af_alt - af_gnomad) > .2)) +
           geom_point(alpha=0.1) +
-          theme_minimal(base_size=18)
+          theme_minimal(base_size=18) +
+          scale_color_manual(values = c("black", "red")) +
+          theme(legend.position = "none")
         print(p)
         dev.off()
         EOF
+
+        zcat -f ~{base} | awk '
+        function abs(x) { return ((x < 0.0) ? -x : x) }
+        BEGIN { FS=OFS="\t" }
+        NR==1 { for(i=1;i<=NF;i++) h[$i]=i; print }
+        NR>1 && (abs($h["af_alt"] - $h["af_gnomad"]) <= ~{max_af_diff} || $h["af_gnomad"] == "NA") { print }
+        ' | bgzip > tmp
+
+        mv tmp ~{base}
+        tabix -s 1 -b 2 -e 2 ~{base}
 
         qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ~{loglog_ylim}
 
@@ -533,6 +547,8 @@ task plot {
 
     output {
         Array[File] pngs = glob("*.png")
+        File out = base
+        File out_tbi = base + ".tbi"
     }
 
     runtime {
