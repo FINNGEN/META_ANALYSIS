@@ -45,7 +45,7 @@ workflow munge {
                 docker = meta_docker
         }
         
-        call plot {
+        call filt {
             input:
                 sumstat_file = harmonize.out,
                 docker = meta_docker
@@ -53,9 +53,10 @@ workflow munge {
     }
 
     output {
-        Array[File] filtered_sumstats = clean_filter.out
+        Array[File] cleaned_sumstats = clean_filter.out
         Array[File] harmonized_sumstats = harmonize.out
-        Array[Array[File]] plots = plot.pngs
+        Array[File] filtered_sumstats = filt.out
+        Array[Array[File]] plots = filt.pngs
     }
 }
 
@@ -78,6 +79,8 @@ task clean_filter {
         String se_type
         String pval_type
         Boolean flip_alleles
+        String? filt_col
+        Float? filt_threshold
     }
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
