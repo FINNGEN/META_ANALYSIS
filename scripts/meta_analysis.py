@@ -311,7 +311,7 @@ class VariantData:
         return self.indel
 
     def __str__(self):
-        return f"chr:{self.chr} pos:{self.pos} ref:{self.ref} alt:{self.alt} beta:{self.bet} pval:{self.pval} se:{self.se}"
+        return f"chr:{self.chr} pos:{self.pos} ref:{self.ref} alt:{self.alt} beta:{self.beta} pval:{self.pval} se:{self.se}"
 
 
 class Study:
