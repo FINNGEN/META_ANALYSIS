@@ -78,6 +78,11 @@ for (s in conf$meta) {
 
 studies <- sapply(conf$meta, function(x) x$name)
 
+if (length(studies) < 3 & leave) {
+  message("Skipping leave-one-out plotting as there are less than 3 studies")
+  leave <- F
+}
+
 study_pval_cols <- sapply(conf$meta, function(x) paste(x$name, x$pval, sep = "_"))
 meta_pval_col <- paste("all", method, "meta_p", sep = "_")
 
