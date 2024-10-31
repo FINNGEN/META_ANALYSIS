@@ -675,6 +675,10 @@ def run():
     studs = get_studies(args.config_file, args.chrom, args.sep, args.flip_indels)
     methods = validate_methods(args.methods, studs)
 
+    if len(studs) < 3 and args.leave_one_out:
+        print("Skipping leave-one-out meta-analysis as there are less than 3 studies", file=sys.stderr)
+        args.leave_one_out = False
+
     outfile = args.path_to_res
     n_meta_cols = 5 if args.is_het_test else 4
 
