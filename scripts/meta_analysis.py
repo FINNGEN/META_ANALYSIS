@@ -5,7 +5,7 @@ import gzip
 from collections import namedtuple
 import sys
 import math
-from scipy.stats import chi2
+from scipy.stats import chi2, norm
 import scipy.stats
 import numpy
 from typing import Dict, Tuple, List
@@ -199,6 +199,9 @@ class VariantData:
             self.se = float(se) if se is not None  else None
         except ValueError:
             self.se = None
+
+        if self.se == None:
+            self.se = abs(self.beta/norm.isf((self.pval)/2))
 
         self.extra_cols = extra_cols
 
@@ -677,9 +680,13 @@ def run():
         methods.append(m)
 
     if "inv_var" in methods or "variance" in methods:
+        missing = []
         for s in studs:
             if not s.has_std_err():
-                raise Exception("Variance based method requested but not all studies have se column specified.")
+                missing.append(s.name)
+
+        if(len(missing)>0):
+            print("Note Standard error column not present for studies [" + ",".join(missing) + "]. SE will be computed for these from p-values" , file=sys.stderr)
 
     outfile = args.path_to_res
 
