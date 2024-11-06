@@ -19,7 +19,7 @@ def generate_json(data, h_idx, columns, studies):
     confs = []
 
     for study in studies:
-        confs.append({
+        study_conf = {
             "name": study,
             "file": data[h_idx[columns["studies"][study]["link"]]].replace("gs:/", "/cromwell_root"),
             "n_cases": format_int(data[h_idx[columns["studies"][study]["n_cases"]]]),
@@ -31,9 +31,11 @@ def generate_json(data, h_idx, columns, studies):
             "effect": columns["studies"][study]["effect"],
             "effect_type": columns["studies"][study]["effect_type"],
             "pval": columns["studies"][study]["pval"],
-            "se": columns["studies"][study]["se"],
             "extra_cols": columns["studies"][study]["extra_cols"]
-        })
+        }
+        if "se" in columns["studies"][study]:
+            study_conf["se"] = columns["studies"][study]["se"]
+        confs.append(study_conf)
 
     json_file = "jsons/" + data[h_idx[columns["phenotype"]]] + ".json" if os.path.isdir("jsons") else data[h_idx[columns["phenotype"]]] + ".json"
     with open(json_file, "w") as out:
