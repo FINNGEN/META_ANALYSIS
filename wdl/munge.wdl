@@ -141,7 +141,7 @@ task clean_filter {
                     $a["pval"]=10^(-$a["pval"])
                 }
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
-                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["EXTRA"]!="TEST_FAIL") {
+                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["sebeta"] > 0 && $a["EXTRA"]!="TEST_FAIL") {
                     if (flip=="true") {
                         tmp=$a["REF"];
                         $a["REF"]=$a["ALT"];
