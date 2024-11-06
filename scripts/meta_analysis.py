@@ -4,7 +4,7 @@ import json
 import gzip
 import sys
 import math
-from scipy.stats import chi2
+from scipy.stats import chi2, norm
 import scipy.stats
 import numpy
 from typing import Dict, Tuple, List
@@ -197,6 +197,9 @@ class VariantData:
             self.se = float(se) if se is not None else None
         except ValueError:
             self.se = None
+
+        if self.se is None:
+            self.se = abs(self.beta/norm.isf((self.pval)/2))
 
         self.extra_cols = extra_cols
 
@@ -633,9 +636,12 @@ def validate_methods(methods, studies):
         if m not in SUPPORTED_METHODS:
             raise Exception("Unsupported meta method" + m + " given. Supported values" + ",".join(SUPPORTED_METHODS))
         if m in ["inv_var", "variance"]:
+            missing = []
             for s in studies:
                 if not s.has_std_err():
-                    raise Exception("Variance based method requested but not all studies have se column specified.")
+                    missing.append(s.name)
+            if missing:
+                print("Note: Standard error column not present for studies [" + ",".join(missing) + "]. SE will be computed for these from p-values.", file=sys.stderr)
         M.append(m)
     return M
 
