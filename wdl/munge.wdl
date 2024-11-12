@@ -78,6 +78,7 @@ task clean_filter {
         String effect_type
         String se_type
         String pval_type
+        String af_allele = "alt"
         Boolean flip_alleles
         String? filt_col
         Float? filt_threshold
@@ -107,9 +108,10 @@ task clean_filter {
                 OFS="\t";
                 effect_type=tolower("~{effect_type}");
                 se_type=tolower("~{se_type}");
-                pval_type=tolower("~{pval_type}")
-                flip="~{flip_alleles}"
-                filter="~{do_filter}"
+                pval_type=tolower("~{pval_type}");
+                flip="~{flip_alleles}";
+                filter="~{do_filter}";
+                af_allele="~{af_allele}";
             }
             NR==1 {
                 for (i=1;i<=NF;i++) {
@@ -141,12 +143,15 @@ task clean_filter {
                     $a["pval"]=10^(-$a["pval"])
                 }
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
-                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["sebeta"] > 0 && $a["EXTRA"]!="TEST_FAIL") {
+                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["pval"] < 1 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["beta"] != 0 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["sebeta"] > 0 && $a["EXTRA"]!="TEST_FAIL") {
                     if (flip=="true") {
                         tmp=$a["REF"];
                         $a["REF"]=$a["ALT"];
                         $a["ALT"]=tmp;
                         $a["beta"]=-1*$a["beta"];
+                        $a["af_alt"]=1-$a["af_alt"];
+                    }
+                    if (af_allele=="ref") {
                         $a["af_alt"]=1-$a["af_alt"];
                     }
                     printf $1;
