@@ -127,7 +127,10 @@ task clean_filter {
                     if ($i=="POS") pos=i
                 }
                 print $0
-            } NR>1 && filter=="true" && $a["~{filt_col}"] > ~{filt_threshold}{
+            } NR>1 {
+                if (filter=="true" && $a["~{filt_col}"] <= ~{filt_threshold}) {
+                    next
+                }
                 if (effect_type=="or") {
                     $a["beta"]=log($a["beta"])
                 }
