@@ -119,9 +119,6 @@ if (leave) {
 message("Reading file ", file, " ...")
 data <- fread(file, header = T, select = keep_cols)
 
-# Remove variants not in reference
-data <- data[! is.na(get(study_pval_cols[[1]]))]
-
 # Remove variants with weak pvals that will be never used
 pass <- apply(data[, ..pval_cols], 1, function(x) any(x < max(pval_thresh), na.rm = T))
 data <- data[pass]
