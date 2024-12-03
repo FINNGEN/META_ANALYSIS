@@ -168,7 +168,8 @@ task lift {
             --REJECT rejected_variants.vcf \
             -R ~{b38_assembly_fasta} \
             --MAX_RECORDS_IN_RAM 500000 \
-            --RECOVER_SWAPPED_REF_ALT true
+            --RECOVER_SWAPPED_REF_ALT true \
+            --DISABLE_SORT true
 
     >>>
 
