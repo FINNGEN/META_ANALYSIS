@@ -9,35 +9,39 @@ for (p in packs) {
 }
 
 option_list <- list(
-  make_option(c("-f", "--file"), type="character", default=NULL,
-              help="dataset file name", metavar="character"),
-  make_option(c("-o", "--out"), type="character",
-              help="output file name [default=%default]", metavar="character"),
-  make_option(c("-m","--method"), type="character", default="inv_var",
-              help="meta-analysis method [default=%default]", metavar="character"),
-  make_option(c("-l","--loo"), action="store_true", default=FALSE,
-              help="use leave-one-out results"),
-  make_option("--conf", type="character", default=NULL,
-              help="meta-analysis config json", metavar="character"),
-  make_option("--pval_thresh", type="character", default="5e-8, 5e-6",
-              help="comma separated list of p-value thresholds used to filter the data for qc", metavar="numeric"),
-  make_option("--region", type="numeric", default=1.0,
-              help="region size in megabases used when counting unique loci hits", metavar="numeric"),
-  make_option(c("-c","--chr_col"), type="character", default="#CHR",
-              help="chromosome column [default=%default]", metavar="character"),
-  make_option(c("-b","--bp_col"), type="character", default="POS",
-              help="bp column [default=%default]", metavar="character"),
-  make_option(c("-r","--ref_col"), type="character", default="REF",
-              help="ref column [default=%default]", metavar="character"),
-  make_option(c("-a","--alt_col"), type="character", default="ALT",
-              help="alt column [default=%default]", metavar="character"),
-  make_option(c("--af_alt_col_suffix"), type="character", default="_af_alt",
-              help="af alt column suffix [default=%default]", metavar="character"),
-  make_option(c("--pheno"), type="character", default="pheno",
-              help="phenotype name [default=%default]", metavar="character"),
-  make_option(c("-w","--weighted"), action="store_true", default=FALSE,
-              help="do inverse variance weighted linear regression")
-);
+  make_option(c("-f", "--file"), type = "character", default = NULL,
+              help = "dataset file name", metavar = "character"),
+  make_option(c("-o", "--out"), type = "character",
+              help = "output file name [default=%default]", metavar = "character"),
+  make_option(c("-m","--method"), type = "character", default = "inv_var",
+              help = "meta-analysis method [default=%default]", metavar = "character"),
+  make_option(c("-l","--loo"), action = "store_true", default = FALSE,
+              help = "use leave-one-out results"),
+  make_option("--conf", type = "character", default = NULL,
+              help = "meta-analysis config json", metavar = "character"),
+  make_option("--pval_thresh", type = "character", default = "5e-8, 5e-6",
+              help = "comma separated list of p-value thresholds used to filter the data for qc", metavar = "numeric"),
+  make_option("--region", type = "numeric", default = 1.0,
+              help = "region size in megabases used when counting unique loci hits", metavar = "numeric"),
+  make_option(c("-c","--chr_col"), type = "character", default = "#CHR",
+              help = "chromosome column [default=%default]", metavar = "character"),
+  make_option(c("-b","--bp_col"), type = "character", default = "POS",
+              help = "bp column [default=%default]", metavar = "character"),
+  make_option(c("-r","--ref_col"), type = "character", default = "REF",
+              help = "ref column [default=%default]", metavar = "character"),
+  make_option(c("-a","--alt_col"), type = "character", default = "ALT",
+              help = "alt column [default=%default]", metavar = "character"),
+  make_option(c("--af_alt_col_suffix"), type = "character", default = "_af_alt",
+              help = "af alt column suffix [default=%default]", metavar = "character"),
+  make_option(c("--pheno"), type = "character", default = "pheno",
+              help = "phenotype name [default=%default]", metavar = "character"),
+  make_option(c("-w","--weighted"), action = "store_true", default = FALSE,
+              help = "do inverse variance weighted linear regression"),
+  make_option("--keep_hla", action = "store_true", default = FALSE,
+              help = "do not remove HLA region variants from QC"),
+  make_option("--hla_region", type = "character", default = "20e6, 40e6",
+              help = "HLA region boundaries", metavar = "numeric")
+)
 
 opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser, positional_arguments = 0)
@@ -56,6 +60,12 @@ pval_thresh <- sort(unique(as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", op
 leave <- opt$options$loo
 region <- round(opt$options$region * 10^6 / 2, 0)
 weighted <- opt$options$weighted
+keep_hla <- opt$options$keep_hla
+hla_region <- as.numeric(unlist(strsplit(gsub("[[:blank:]]", "", opt$options$hla_region), ",")))
+
+if (length(hla_region) != 2) {
+  stop("HLA region boundaries must be two numbers separated by a comma.")
+}
 
 file <- opt$options$file
 conf <- rjson::fromJSON(file = opt$options$conf)
@@ -67,6 +77,11 @@ for (s in conf$meta) {
 }
 
 studies <- sapply(conf$meta, function(x) x$name)
+
+if (length(studies) < 3 & leave) {
+  message("Skipping leave-one-out plotting as there are less than 3 studies")
+  leave <- F
+}
 
 study_pval_cols <- sapply(conf$meta, function(x) paste(x$name, x$pval, sep = "_"))
 meta_pval_col <- paste("all", method, "meta_p", sep = "_")
@@ -104,12 +119,14 @@ if (leave) {
 message("Reading file ", file, " ...")
 data <- fread(file, header = T, select = keep_cols)
 
-# Remove variants not in reference
-data <- data[! is.na(get(study_pval_cols[[1]]))]
-
 # Remove variants with weak pvals that will be never used
 pass <- apply(data[, ..pval_cols], 1, function(x) any(x < max(pval_thresh), na.rm = T))
 data <- data[pass]
+
+# Remove HLA region variants
+if (! keep_hla) {
+  data <- data[! (data[[chr_col]] == 6 & data[[bp_col]] >= hla_region[1] & data[[bp_col]] <= hla_region[2])]
+}
 
 for (pval_thresh_i in pval_thresh) {
   
@@ -124,9 +141,9 @@ for (pval_thresh_i in pval_thresh) {
   
   # Get gw signif hits
   sig_loc_list <- list()
+  with_more_than1_hit <- c()
   for (pval_col in pval_cols) {
     tempdata <- DATA[DATA[[pval_col]] < pval_thresh_i]
-    n_sig_loci <- 0
     message("Finding significant loci according to \"", pval_col, "\"")
     while (nrow(tempdata) > 0) {
       maxrow <- tempdata[which.min(tempdata[[pval_col]])]
@@ -151,40 +168,55 @@ for (pval_thresh_i in pval_thresh) {
         }
       }
       tempdata <- tempdata[! in_region]
-      n_sig_loci <- n_sig_loci + 1
       if (is.null(sig_loc_list[[pval_col]])) {
         sig_loc_list[[pval_col]] <- maxrow
       } else {
         sig_loc_list[[pval_col]] <- rbind(sig_loc_list[[pval_col]], maxrow)
       }
     }
+    n_sig_loci <- ifelse(is.null(sig_loc_list[[pval_col]]), 0, nrow(sig_loc_list[[pval_col]]))
     message("Found ", n_sig_loci, " significant loci.")
+    if (n_sig_loci > 1) {
+      with_more_than1_hit <- c(with_more_than1_hit, pval_col)
+    }
     qc_dt_i[, (sapply(strsplit(pval_col, "_"), function(x) paste(c(x[1:(length(x)-1)], "N_hits"), collapse = "_"))) := n_sig_loci]
   }
   rm(tempdata)
   
-  ref_hits <- sig_loc_list[[pval_cols[1]]]
+  # Use first study / meta-study in list as reference for hits
+  ref_hits <- sig_loc_list[[c(with_more_than1_hit, study_pval_cols[1])[1]]]
+  ref_study <- studies[1]
+  ref_beta_col <- study_beta_cols[startsWith(study_beta_cols, prefix = ref_study)]
+  ref_sebeta_col <- study_sebeta_cols[startsWith(study_sebeta_cols, prefix = ref_study)]
+  ref_pval_col <- study_pval_cols[startsWith(study_pval_cols, prefix = ref_study)]
+  ref_af_col <- af_cols[startsWith(af_cols, prefix = ref_study)]
   
-  beta_cols <- c(study_beta_cols[-1], meta_beta_col)
-  sebeta_cols <- c(study_sebeta_cols[-1], meta_sebeta_col)
+  non_ref_studies <- studies[studies != ref_study]
+  non_ref_study_beta_cols <- study_beta_cols[study_beta_cols != ref_beta_col]
+  non_ref_study_sebeta_cols <- study_sebeta_cols[study_sebeta_cols != ref_sebeta_col]
+  non_ref_study_pval_cols <- study_pval_cols[study_pval_cols != ref_pval_col]
+  non_ref_study_af_cols <- af_cols[af_cols != ref_af_col]
+  
+  beta_cols <- c(study_beta_cols[study_beta_cols != ref_beta_col], meta_beta_col)
+  sebeta_cols <- c(study_sebeta_cols[study_sebeta_cols != ref_sebeta_col], meta_sebeta_col)
   for (i in 1:length(beta_cols)) {
     tryCatch(
       expr = {
         if (weighted) {
           weights <- 1 / ref_hits[[sebeta_cols[i]]]^2
-          m <- lm(as.formula(paste(beta_cols[i], "~", study_beta_cols[1], "+ 0")), data = ref_hits, weights = weights)
+          m <- lm(as.formula(paste(beta_cols[i], "~", ref_beta_col, "+ 0")), data = ref_hits, weights = weights)
         } else {
-          m <- lm(as.formula(paste(beta_cols[i], "~", study_beta_cols[1], "+ 0")), data = ref_hits)
+          m <- lm(as.formula(paste(beta_cols[i], "~", ref_beta_col, "+ 0")), data = ref_hits)
         }
         ms <- summary(m)
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2", sep = "_")) := round(ms$r.squared, 3)]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
+        qc_dt_i[, (paste(ref_beta_col, "vs", beta_cols[i], "slope", sep = "_")) := round(ms$coefficients[1,1], 3)]
+        qc_dt_i[, (paste(ref_beta_col, "vs", beta_cols[i], "r2", sep = "_")) := round(ms$r.squared, 3)]
+        qc_dt_i[, (paste(ref_beta_col, "vs", beta_cols[i], "r2adj", sep = "_")) := round(ms$adj.r.squared, 3)]
       },
       error = function(e) {
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "slope", sep = "_")) := NA]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2", sep = "_")) := NA]
-        qc_dt_i[, (paste(study_beta_cols[1], "vs", beta_cols[i], "r2adj", sep = "_")) := NA]
+        qc_dt_i[, (paste(ref_beta_col, "vs", beta_cols[i], "slope", sep = "_")) := NA]
+        qc_dt_i[, (paste(ref_beta_col, "vs", beta_cols[i], "r2", sep = "_")) := NA]
+        qc_dt_i[, (paste(ref_beta_col, "vs", beta_cols[i], "r2adj", sep = "_")) := NA]
       }
     )
   }
@@ -192,10 +224,10 @@ for (pval_thresh_i in pval_thresh) {
   for (pval_col in meta_pval_cols) {
     tryCatch(
       expr = {
-        qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := round(sum(ref_hits[[pval_cols[1]]] > ref_hits[[pval_col]], na.rm = T) / nrow(ref_hits), 3)]
+        qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", ref_study, sep = "_")) := round(sum(ref_hits[[ref_pval_col]] > ref_hits[[pval_col]], na.rm = T) / nrow(ref_hits), 3)]
       },
       error = function(e) {
-        qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", studies[1], sep = "_")) := NA]
+        qc_dt_i[, (paste("pct_pval_stronger_in", pval_col, "vs", ref_study, sep = "_")) := NA]
       }
     )
   }
@@ -236,9 +268,9 @@ for (pval_thresh_i in pval_thresh) {
   rm(af)
   
   # P-value comparisons scatter plot
-  pval_plots <- lapply(2:length(study_pval_cols), function(i) {
-    tempcols <- study_pval_cols[c(1,i)]
-    af_col <- af_cols[i]
+  pval_plots <- lapply(1:length(non_ref_study_pval_cols), function(i) {
+    tempcols <- c(ref_pval_col, non_ref_study_pval_cols[i])
+    af_col <- non_ref_study_af_cols[i]
     tempdata <- na.omit(cbind(-log10(ref_hits[, ..tempcols]), ref_hits[, ..af_col]))
     tempdata[[af_col]] = cut(tempdata[[af_col]], breaks = c(0.5, 0.2, 0.05, 0.01, 0))
     color_vector <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0")
@@ -248,8 +280,8 @@ for (pval_thresh_i in pval_thresh) {
       #geom_smooth(method = "lm", se = F) +
       geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
       expand_limits(x = 0, y = 0) +
-      labs(x = paste(studies[1], "mlogp"),
-           y = paste(studies[i], "mlogp"),
+      labs(x = paste(ref_study, "mlogp"),
+           y = paste(non_ref_studies[i], "mlogp"),
            color = "Ext maf") +
       scale_color_manual(labels = names(color_vector), values = color_vector, drop = F) +
       theme_bw() +
@@ -265,9 +297,9 @@ for (pval_thresh_i in pval_thresh) {
   
   
   # Effect size comparisons scatter plot
-  beta_plots <- lapply(2:length(study_beta_cols), function(i) {
-    af_col <- af_cols[i]
-    tempcols <- c(study_beta_cols[c(1,i)], af_col)
+  beta_plots <- lapply(1:length(non_ref_study_beta_cols), function(i) {
+    af_col <- non_ref_study_af_cols[i]
+    tempcols <- c(ref_beta_col, non_ref_study_beta_cols[i], af_col)
     tempdata <- na.omit(ref_hits[, ..tempcols])
     neg_betas <- tempdata[[tempcols[1]]] < 0
     new_beta1 <- tempdata[[tempcols[1]]]
@@ -283,8 +315,8 @@ for (pval_thresh_i in pval_thresh) {
       geom_point() +
       stat_smooth(method = "lm", se = F, formula = "y ~ x + 0", fullrange = T, size = .8) +
       geom_abline(slope = 1, intercept = 0, color = "grey", linetype = "dashed") +
-      labs(x = paste(studies[1], "beta"),
-           y = paste(studies[i], "beta"),
+      labs(x = paste(ref_study, "beta"),
+           y = paste(non_ref_studies[i], "beta"),
            color = "Ext maf") +
       scale_color_manual(labels = names(color_vector), values = color_vector, drop = F) +
       theme_bw() +
@@ -299,36 +331,42 @@ for (pval_thresh_i in pval_thresh) {
   })
   
   # Het p histogram
-  tempdata <- -log10(na.omit(ref_hits[, ..het_p_col]))
-  het_hist <- ggplot(tempdata, aes_string(x = het_p_col)) +
-    geom_histogram() +
-    xlab(paste("all", method, "het_mlogp", sep = "_")) +
-    theme_bw() +
-    theme(axis.title = element_text(size = 7),
-          axis.text = element_text(size = 7))
+  # tempdata <- -log10(na.omit(ref_hits[, ..het_p_col]))
+  # het_hist <- ggplot(tempdata, aes_string(x = het_p_col)) +
+  #   geom_histogram() +
+  #   xlab(paste("all", method, "het_mlogp", sep = "_")) +
+  #   theme_bw() +
+  #   theme(axis.title = element_text(size = 7),
+  #         axis.text = element_text(size = 7))
   
   # P-value comparison histogram
-  p_cols <- c(meta_pval_col, study_pval_cols[1])
-  tempdata <- -log10(na.omit(ref_hits[, ..p_cols]))
+  p_cols <- c(meta_pval_col, ref_pval_col)
+  tempdata <- -log10(ref_hits[, ..p_cols])
   diff <- data.table(tempdata[[1]] - tempdata[[2]])
-  pval_hist <- ggplot(diff, aes(x = V1)) + 
-    geom_histogram() +
-    xlab(paste0("all_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-    geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+  tempdata <- na.omit(cbind(diff, ref_hits[[af_cols[1]]] < 0.01))
+  tempdata[, V2 := ifelse(V2, "AF<0.01", "AF>=0.01")]
+  pval_hist <- ggplot(tempdata, aes(x = V1, fill = V2)) + 
+    geom_histogram(alpha = 0.6, position = "identity") +
+    scale_fill_manual(values=c("#ca0020", "#0571b0")) +
+    labs(x = paste0("all_", method, "_meta_mlogp - ", ref_study, "_mlogp"),
+         fill = element_blank()) +
     theme_bw() +
     theme(axis.title = element_text(size = 7),
           axis.text = element_text(size = 7))
   
   # Leave-one-out qc
   if (leave) {
-    p_cols <- c(study_pval_cols[1], leave_pval_cols[-1])
+    p_cols <- c(ref_pval_col, leave_pval_cols[! grepl(ref_study, leave_pval_cols)])
     tempdata <- -log10(ref_hits[, ..p_cols])
     loo_hists <- lapply(2:length(p_cols), function(i) {
-      diff <- na.omit(data.table(tempdata[[i]] - tempdata[[1]]))
-      p <- ggplot(diff, aes(x = V1)) +
-        geom_histogram() +
-        xlab(paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", studies[1], "_mlogp")) +
-        geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+      diff <- data.table(tempdata[[i]] - tempdata[[1]])
+      tempdata <- na.omit(cbind(diff, ref_hits[[ref_af_col]] < 0.01))
+      tempdata[, V2 := ifelse(V2, "AF<0.01", "AF>=0.01")]
+      p <- ggplot(tempdata, aes(x = V1, fill = V2)) +
+        geom_histogram(alpha = 0.6, position = "identity") +
+        scale_fill_manual(values=c("#ca0020", "#0571b0")) +
+        labs(x = paste0("leave_", studies[i], "_", method, "_meta_mlogp - ", ref_study, "_mlogp"),
+             fill = element_blank()) +
         theme_bw() +
         theme(axis.title = element_text(size = 7),
               axis.text = element_text(size = 7))
@@ -338,7 +376,8 @@ for (pval_thresh_i in pval_thresh) {
   
   pval_plots_arranged <- ggarrange(plotlist = pval_plots, common.legend = T, legend = "bottom", nrow = 1)
   beta_plots_arranged <- ggarrange(plotlist = beta_plots, legend = "none", nrow = 1)
-  hists_arranged <- ggarrange(het_hist, pval_hist, legend = "none", nrow = 1)
+  #hists_arranged <- ggarrange(het_hist, pval_hist, legend = "none", nrow = 1)
+  hists_arranged <- ggarrange(pval_hist, legend = "right", nrow = 1)
   
   plotlist <- list(pval_plots_arranged, beta_plots_arranged, hists_arranged)
   

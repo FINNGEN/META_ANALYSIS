@@ -4,38 +4,59 @@ workflow munge {
 
     input {
         File sumstats_loc
-        Array[String] sumstat_files = read_lines(sumstats_loc)
+        Boolean liftover
+        String common_docker
+        String meta_docker
     }
 
+    Array[String] sumstat_files = read_lines(sumstats_loc)
+
     scatter (sumstat_file in sumstat_files) {
+        
         call clean_filter {
-            input: sumstat_file=sumstat_file
-        }
-        call sumstat_to_vcf {
-            input: sumstat_file=clean_filter.out
-        }
-        call lift {
-            input: sumstat_vcf=sumstat_to_vcf.vcf
-        }
-        call lift_postprocess {
             input:
-                lifted_vcf=lift.lifted_variants_vcf,
-                sumstat_file=clean_filter.out
+            sumstat_file = sumstat_file,
+            docker = common_docker
         }
+
+        if (liftover) {
+            call sumstat_to_vcf {
+                input:
+                    sumstat_file = clean_filter.out,
+                    docker = common_docker
+            }
+            
+            call lift {
+                input:
+                    sumstat_vcf = sumstat_to_vcf.vcf
+            }
+            
+            call lift_postprocess {
+                input:
+                    lifted_vcf = lift.lifted_variants_vcf,
+                    sumstat_file = clean_filter.out,
+                    docker = common_docker
+            }
+        }
+        
         call harmonize {
-            input: sumstat_file=lift_postprocess.lifted_variants
+            input:
+                sumstat_file = select_first([lift_postprocess.lifted_variants, clean_filter.out]),
+                docker = meta_docker
         }
-        call plot {
-            input: sumstat_file=harmonize.out
+        
+        call filt {
+            input:
+                sumstat_file = harmonize.out,
+                docker = meta_docker
         }
     }
 
     output {
-        Array[File] filtered_sumstats = clean_filter.out
-        Array[File] lifted_sumstats = lift_postprocess.lifted_variants
-        Array[File] rejected_variants = lift.rejected_variants
+        Array[File] cleaned_sumstats = clean_filter.out
         Array[File] harmonized_sumstats = harmonize.out
-        Array[Array[File]] plots = plot.pngs
+        Array[File] filtered_sumstats = filt.out
+        Array[Array[File]] plots = filt.pngs
     }
 }
 
@@ -51,12 +72,20 @@ task clean_filter {
         String ref_col
         String alt_col
         String af_col
-        String beta_col
+        String effect_col
         String se_col
         String pval_col
-
-        String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
+        String effect_type
+        String se_type
+        String pval_type
+        String af_allele = "alt"
+        Boolean flip_alleles
+        String? filt_col
+        Float? filt_threshold
     }
+
+    String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
+    Boolean do_filter = defined(filt_col) && defined(filt_threshold)
 
     command <<<
 
@@ -74,7 +103,16 @@ task clean_filter {
         printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
         zcat -f ~{sumstat_file} | awk ' \
-            BEGIN{FS="\t| "; OFS="\t"}
+            BEGIN{
+                FS="\t| ";
+                OFS="\t";
+                effect_type=tolower("~{effect_type}");
+                se_type=tolower("~{se_type}");
+                pval_type=tolower("~{pval_type}");
+                flip="~{flip_alleles}";
+                filter="~{do_filter}";
+                af_allele="~{af_allele}";
+            }
             NR==1 {
                 for (i=1;i<=NF;i++) {
                     sub("^~{chr_col}$", "#CHR", $i);
@@ -82,7 +120,7 @@ task clean_filter {
                     sub("^~{ref_col}$", "REF", $i);
                     sub("^~{alt_col}$", "ALT", $i);
                     sub("^~{af_col}$", "af_alt", $i);
-                    sub("^~{beta_col}$", "beta", $i);
+                    sub("^~{effect_col}$", "beta", $i);
                     sub("^~{se_col}$", "sebeta", $i);
                     sub("^~{pval_col}$", "pval", $i);
                     a[$i]=i;
@@ -90,9 +128,36 @@ task clean_filter {
                 }
                 print $0
             } NR>1 {
+                if (filter=="true" && $a["~{filt_col}"] <= ~{filt_threshold}) {
+                    next
+                }
+                if (effect_type=="or") {
+                    $a["beta"]=log($a["beta"])
+                }
+                if (se_type=="ci") {
+                    split($a["sebeta"], ci, ",")
+                    if (effect_type=="or") {
+                        ci[1]=log(ci[1])
+                        ci[2]=log(ci[2])
+                    }
+                    $a["sebeta"]=(ci[2]-ci[1])/(2*1.96)
+                }
+                if (pval_type=="mlog10p") {
+                    $a["pval"]=10^(-$a["pval"])
+                }
                 sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
-                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["EXTRA"]!="TEST_FAIL") {
-                    printf $1
+                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["pval"] < 1 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["beta"] != 0 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["sebeta"] > 0 && $a["EXTRA"]!="TEST_FAIL") {
+                    if (flip=="true") {
+                        tmp=$a["REF"];
+                        $a["REF"]=$a["ALT"];
+                        $a["ALT"]=tmp;
+                        $a["beta"]=-1*$a["beta"];
+                        $a["af_alt"]=1-$a["af_alt"];
+                    }
+                    if (af_allele=="ref") {
+                        $a["af_alt"]=1-$a["af_alt"];
+                    }
+                    printf $1;
                     for (i=2; i<=NF; i++) {
                         if (i==pos) {
                             printf "\t%d", $i
@@ -149,9 +214,9 @@ task sumstat_to_vcf {
         File sumstat_file
 
         String docker
-
-        String base = basename(sumstat_file, ".gz")
     }
+
+    String base = basename(sumstat_file, ".gz")
 
     command <<<
 
@@ -241,9 +306,9 @@ task lift {
         File chainfile
         File b38_assembly_fasta
         File b38_assembly_dict
-
-        String base = basename(sumstat_vcf, ".vcf.gz")
     }
+
+    String base = basename(sumstat_vcf, ".vcf.gz")
 
     command <<<
 
@@ -285,9 +350,9 @@ task lift_postprocess {
         File sumstat_file
 
         String docker
-
-        String base = basename(lifted_vcf, ".vcf")
     }
+
+    String base = basename(lifted_vcf, ".vcf")
 
     command <<<
 
@@ -403,10 +468,10 @@ task harmonize {
         String docker
         File gnomad_ref
         String options
-
-        String base = basename(sumstat_file, ".tsv.gz")
-        String gnomad_ref_base = basename(gnomad_ref)
     }
+
+    String base = basename(sumstat_file, ".tsv.gz")
+    String gnomad_ref_base = basename(gnomad_ref)
 
     command <<<
 
@@ -421,8 +486,7 @@ task harmonize {
         mv ~{gnomad_ref} ~{gnomad_ref_base}
 
         echo "`date` harmonizing stats with gnomAD"
-        python3 /META_ANALYSIS/scripts/harmonize.py ~{base} ~{gnomad_ref_base} ~{options} \
-        | bgzip > ~{base}.~{gnomad_ref_base}
+        harmonize.py ~{base} ~{gnomad_ref_base} ~{options} | bgzip > ~{base}.~{gnomad_ref_base}
         
         tabix -s 1 -b 2 -e 2 ~{base}.~{gnomad_ref_base}
         echo "`date` done"
@@ -446,16 +510,17 @@ task harmonize {
 }
 
 # Make qc plots
-task plot {
+task filt {
 
     input {
         File sumstat_file
 
         String docker
         Int loglog_ylim
-
-        String base = basename(sumstat_file)
+        Float max_af_diff
     }
+
+    String base = basename(sumstat_file)
 
     command <<<
 
@@ -467,21 +532,36 @@ task plot {
         require(ggplot2)
         require(data.table)
         options(bitmapType='cairo')
-        data <- fread("~{base}", select=c("#CHR", "POS", "pval", "af_gnomad", "af_alt"), header=T)
+        data <- fread("~{base}", select=c("af_gnomad", "af_alt"), header=T)
+        message(nrow(data[abs(af_alt - af_gnomad) > ~{max_af_diff}]), " variants will be filtered out with AF difference to GnomAD > ~{max_af_diff}")
         png("~{base}_AF.png", width=1000, height=1000, units="px")
-        p <- ggplot(data, aes_string(x="af_alt", y="af_gnomad")) +
+        p <- ggplot(data, aes(x = af_alt, y = af_gnomad, color = abs(af_alt - af_gnomad) > .2)) +
           geom_point(alpha=0.1) +
-          theme_minimal(base_size=18)
+          theme_minimal(base_size=18) +
+          scale_color_manual(values = c("black", "red")) +
+          theme(legend.position = "none")
         print(p)
         dev.off()
         EOF
 
-        /META_ANALYSIS/scripts/qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ~{loglog_ylim}
+        zcat -f ~{base} | awk '
+        function abs(x) { return ((x < 0.0) ? -x : x) }
+        BEGIN { FS=OFS="\t" }
+        NR==1 { for(i=1;i<=NF;i++) h[$i]=i; print }
+        NR>1 && (abs($h["af_alt"] - $h["af_gnomad"]) <= ~{max_af_diff} || $h["af_gnomad"] == "NA") { print }
+        ' | bgzip > tmp
+
+        mv tmp ~{base}
+        tabix -s 1 -b 2 -e 2 ~{base}
+
+        qqplot.R --file ~{base} --bp_col "POS" --chrcol "#CHR" --pval_col "pval" --loglog_ylim ~{loglog_ylim}
 
     >>>
 
     output {
         Array[File] pngs = glob("*.png")
+        File out = base
+        File out_tbi = base + ".tbi"
     }
 
     runtime {

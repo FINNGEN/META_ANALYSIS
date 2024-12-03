@@ -5,9 +5,6 @@ import gzip
 import numpy
 from typing import Dict, Tuple, List
 
-flip = {'A':'T','C':'G','T':'A','G':'C'}
-
-
 class Variant():
 
     def __init__(self, chr, pos, ref, alt, af):
@@ -94,8 +91,8 @@ class VariantData(Variant):
                 return False
 
             elif self.ref == other.alt and self.alt == other.ref:
-                self.beta = -1 * self.beta if self.beta is not None else None
-                self.af = 1 - self.af if self.af is not None else None
+                self.beta = round(-1 * self.beta, get_decimal_places(self.beta)) if self.beta is not None else None
+                self.af = round(1 - self.af, get_decimal_places(self.af)) if self.af is not None else None
                 t = self.alt
                 self.alt = self.ref
                 self.ref = t
@@ -105,8 +102,8 @@ class VariantData(Variant):
                 self.alt = flip_strand(self.alt)
                 return True
             elif self.ref == flip_alt and self.alt==flip_ref:
-                self.beta = -1 * self.beta if self.beta is not None else None
-                self.af = 1 - self.af if self.af is not None else None
+                self.beta = round(-1 * self.beta, get_decimal_places(self.beta)) if self.beta is not None else None
+                self.af = round(1 - self.af, get_decimal_places(self.af)) if self.af is not None else None
                 self.ref = flip_strand(self.alt)
                 self.alt = flip_strand(self.ref)
                 return True
@@ -166,7 +163,16 @@ def choose_best_variant(variant_list: List[VariantData], require_gnomad: bool, g
         return variant_list[0]
     else:
         return None
-
+    
+def get_decimal_places(number):
+    if number is not None:
+        str_num = str(number)
+        if '.' in str_num:
+            return len(str_num.split('.')[1])
+        else:
+            return 0
+    else:
+        return None
 
 def harmonize(file_in, file_ref, chr_col, pos_col, ref_col, alt_col, af_col, beta_col, require_gnomad, passing_only, gnomad_min_an, gnomad_max_abs_diff, pre_aligned, keep_best_duplicate):
 
