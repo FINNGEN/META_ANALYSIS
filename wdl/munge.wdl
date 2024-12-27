@@ -128,7 +128,7 @@ task clean_filter {
                 }
                 print $0
             } NR>1 {
-                if (filter=="true" && $a["~{filt_col}"] <= ~{filt_threshold}) {
+                if (filter=="true" && $a["~{filt_col}"] <= ~{default="0" filt_threshold}) {
                     next
                 }
                 if (effect_type=="or") {
