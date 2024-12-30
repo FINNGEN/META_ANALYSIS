@@ -126,6 +126,7 @@ task clean_filter {
                     a[$i]=i;
                     if ($i=="POS") pos=i
                 }
+                sub(/(\t| )$/, "", $0);
                 print $0
             } NR>1 {
                 if (filter=="true" && $a["~{filt_col}"] <= ~{default="0" filt_threshold}) {
