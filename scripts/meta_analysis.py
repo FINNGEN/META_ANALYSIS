@@ -199,7 +199,10 @@ class VariantData:
             self.se = None
 
         if self.se is None:
-            self.se = abs(self.beta/norm.isf((self.pval)/2))
+            try:
+                self.se = abs(self.beta/norm.isf((self.pval)/2))
+            except TypeError:
+                self.se = None
 
         self.extra_cols = extra_cols
 
@@ -462,7 +465,7 @@ class Study:
                 pval = None
                 eff = None
 
-            if( effect_type=="or" and eff):
+            if (effect_type=="or" and eff):
                 eff = math.log(eff)
 
             extracols = [ l[self.conf["h_idx"][c]] for c in self.conf["extra_cols"] ]
@@ -472,18 +475,18 @@ class Study:
             if self.prev_var is not None and v < self.prev_var:
                 raise Exception("Disorder in study " + self.name + " in file " + self.conf['file'] + ". Sort all summary statistic files by chromosome and then position and rerun.\nOffending line: " + "\t".join(l))
             self.prev_var = v
-            if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos  ):
+            if len(vars)==0 or ( vars[0].chr == v.chr and vars[0].pos == v.pos ):
                 added=False
                 for v_ in vars:
                     if v == v_:
                         print('ALREADY ADDED FOR STUDY ' + self.name + ': ' + str(v), file=sys.stderr)
                         added=True
                 if not added:
-                    vars.append(v )
+                    vars.append(v)
                 if just_one:
                     break
             else:
-                self.future.append(v )
+                self.future.append(v)
                 break
 
         return vars
@@ -576,7 +579,7 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
 
     return meta_res
 
-def get_next_variant( studies : List[Study]) -> List[VariantData]:
+def get_next_variant(studies : List[Study]) -> List[VariantData]:
     '''
         get variant data for all studies
         The variant data is the first in chromosomal order across studies (ties broken by alphabetic order of ref)
