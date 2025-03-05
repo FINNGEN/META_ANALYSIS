@@ -67,13 +67,12 @@ def categorize_columns(header, args):
         if col == args.phenotype_col:
             columns["phenotype"] = col
         for s in args.studies:
-            if col.startswith(s):
-                if col.endswith(args.link_col_suffix):
-                    columns["studies"][s]["link"] = col
-                elif col.endswith(args.n_cases_col_suffix):
-                    columns["studies"][s]["n_cases"] = col
-                elif col.endswith(args.n_controls_col_suffix):
-                    columns["studies"][s]["n_controls"] = col
+            if col == s + args.link_col_suffix:
+                columns["studies"][s]["link"] = col
+            elif col == s + args.n_cases_col_suffix:
+                columns["studies"][s]["n_cases"] = col
+            elif col == s + args.n_controls_col_suffix:
+                columns["studies"][s]["n_controls"] = col
 
     return columns
 
