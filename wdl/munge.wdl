@@ -440,7 +440,7 @@ task lift_postprocess {
 
         EOF
 
-        tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ~{base}.tsv.gz
+        tabix -s $chr_col -b $pos_col -e $pos_col ~{base}.tsv.gz
 
     >>>
 
@@ -453,7 +453,7 @@ task lift_postprocess {
         docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
-        disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"
+        disks: "local-disk " + (5 * (ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + 1)) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
