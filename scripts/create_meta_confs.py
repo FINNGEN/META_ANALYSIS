@@ -14,7 +14,7 @@ def format_int(val):
     except ValueError:
         return 0
 
-def generate_json(data, h_idx, columns, studies):
+def generate_json(data, h_idx, columns, studies, continuous):
 
     confs = []
 
@@ -23,7 +23,7 @@ def generate_json(data, h_idx, columns, studies):
             "name": study,
             "file": data[h_idx[columns["studies"][study]["link"]]].replace("gs:/", "/cromwell_root"),
             "n_cases": format_int(data[h_idx[columns["studies"][study]["n_cases"]]]),
-            "n_controls": format_int(data[h_idx[columns["studies"][study]["n_controls"]]]),
+            "n_controls": 0 if continuous else format_int(data[h_idx[columns["studies"][study]["n_controls"]]]),
             "chr": columns["studies"][study]["chr"],
             "pos": columns["studies"][study]["pos"],
             "ref": columns["studies"][study]["ref"],
@@ -90,6 +90,7 @@ def run():
     parser.add_argument("--n_cases_col_suffix", action="store", type=str, default="_n_cases", help="Suffix for the column name containing the number of cases. (Default: '_n_cases')")
     parser.add_argument("--n_controls_col_suffix", action="store", type=str, default="_n_controls", help="Suffix for the column name containing the number of controls. (Default: '_n_controls')")
     parser.add_argument("--study_cols_json", action="store", type=str, help="JSON file containing the column names in sumstat files per study")
+    parser.add_argument("--continuous", action="store_true", help="Phenotypes are continuous (assume number of controls equals 0)")
     parser.add_argument("--min_studies", action="store", type=int, default=2, help="Minimum number of studies required for a phenotype to be included in the meta-analysis. (Default: 2)")
     parser.add_argument("--complete", action="store_true", help="Only include phenotypes with all studies present")
     parser.add_argument("--required_studies", action="store", type=str, nargs="+", help="List of studies that are required for a phenotype to be included in the meta-analysis")
@@ -128,7 +129,7 @@ def run():
                     print(f"Skipping {d[h_idx[columns['phenotype']]]} as it does not have all required studies.")
                     continue
             f_out.write("\t".join(links) + "\n")
-            generate_json(d, h_idx, columns, pheno_studies)
+            generate_json(d, h_idx, columns, pheno_studies, args.continuous)
             if args.bucket is not None:
                 f_out_json.write(os.path.join(args.bucket, "jsons", d[h_idx[columns["phenotype"]]]) + ".json\n")
 
