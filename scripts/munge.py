@@ -39,6 +39,8 @@ def process_file(f_in, args):
     filt_idx = -1
     col_map_name_to_index = {} # Will map {standard_name: index}
     error_lines = 0
+    ok_lines = 0
+    number_of_fields = None
 
     # Process every line from the input file handle
     for line_num, line in enumerate(f_in):
@@ -47,6 +49,11 @@ def process_file(f_in, args):
             fields = line.strip().split(args.delim)
             if not fields:
                 continue  # Skip empty lines
+
+            if number_of_fields is None:
+                number_of_fields = len(fields)
+            elif len(fields) != number_of_fields:
+                raise ValueError(f"Inconsistent number of fields. Expected {number_of_fields}, got {len(fields)}.")
 
             # --- HEADER PROCESSING ---
             if line_num == 0:
@@ -194,13 +201,15 @@ def process_file(f_in, args):
                 # Print the processed line
                 print("\t".join(fields))
 
+                ok_lines += 1
+
         except (ValueError, IndexError, TypeError, ZeroDivisionError) as e:
             # Skip any lines that cause conversion or processing errors
             error_lines += 1
             if args.verbose:
-                sys.stderr.write(f"Skipping bad line {line_num+1}: {line.strip()}. Error: {e}\n")
+                sys.stderr.write(f"Skipping bad line {line_num+1}: {line.strip(args.delim)}. Error: {e}\n")
             continue
-    sys.stderr.write(f"Finished processing. Skipped {error_lines} lines due to errors.\n")
+    sys.stderr.write(f"Finished processing. Skipped {error_lines} variants due to errors. Output {ok_lines} variants.\n")
     
 
 def main():
