@@ -102,7 +102,7 @@ task clean_filter {
         pos_col=$(zcat -f ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{pos_col}" | head -1 | cut -d ':' -f1)
         printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
-        python3 munge.py ~{sumstat_file} | \
+        munge.py ~{sumstat_file} \
             --chr-col ~{chr_col} \
             --pos-col ~{pos_col} \
             --ref-col ~{ref_col} \
