@@ -16,7 +16,7 @@ workflow munge {
         call clean_filter {
             input:
             sumstat_file = sumstat_file,
-            docker = common_docker
+            docker = meta_docker
         }
 
         if (liftover) {
