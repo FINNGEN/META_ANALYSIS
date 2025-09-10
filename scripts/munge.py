@@ -4,9 +4,30 @@ import sys
 import math
 import argparse
 import gzip
+from scipy.stats import norm, chi2
+from scipy.optimize import brentq
 
 # Example usage:
 # python3 munge.py biomarkers-30780-both_sexes-irnt.tsv.bgz --chr-col chr --pos-col pos --ref-col ref --alt-col alt --af-col af_EUR --effect-col beta_EUR --se-col se_EUR --pval-col neglog10_pval_EUR --effect-type beta --pval-type mlog10p | sort -k 1,1g -k2,2g | bgzip > munged.gz
+
+def estimate_se_from_mlogp(beta, mlogp):
+    """
+    Calculates the standard error (SE) from -log10(p-value) and beta
+    using the chi-squared distribution in log-space.
+
+    Apparently, no function exists to calculate inverse of logsf,
+    so we use a root-finding approach (Brent's method) to find
+    the z^2 value that corresponds to the given p-value.
+    """
+    target_log_p = -mlogp * math.log(10)
+
+    def func(z_squared, target_log_p):
+        return chi2.logsf(z_squared, df=1) - target_log_p
+    
+    z_squared = brentq(func, 0, 1e6, args=target_log_p)
+    se = abs(beta) / math.sqrt(z_squared)
+
+    return se
 
 def process_file(f_in, args):
     """
@@ -40,6 +61,7 @@ def process_file(f_in, args):
     col_map_name_to_index = {} # Will map {standard_name: index}
     error_lines = 0
     ok_lines = 0
+    filter_fail_lines = 0
     number_of_fields = None
 
     # Process every line from the input file handle
@@ -47,8 +69,11 @@ def process_file(f_in, args):
         try:
             # Split line on any whitespace (tabs or spaces)
             fields = line.strip().split(args.delim)
-            if not fields:
-                continue  # Skip empty lines
+            if not fields: # Skip empty lines
+                filter_fail_lines += 1
+                if args.verbose:
+                    sys.stderr.write(f"Skipping empty line {line_num+1}.\n")
+                continue
 
             if number_of_fields is None:
                 number_of_fields = len(fields)
@@ -105,8 +130,11 @@ def process_file(f_in, args):
             # Filtering
             if run_filter:
                 filt_val = float(fields[filt_idx])
-                if filt_val <= filt_threshold:
-                    continue  # Filter failed, skip this line
+                if filt_val <= filt_threshold: # Filter failed, skip this line
+                    filter_fail_lines += 1
+                    if args.verbose:
+                        sys.stderr.write(f"Skipping line {line_num+1} due to filter ({filt_val} <= {filt_threshold}): {line.strip(args.delim)}")
+                    continue
 
             # Get key values that need transformation
             beta_str = fields[col_indices["beta"]]
@@ -114,24 +142,12 @@ def process_file(f_in, args):
             pval_str = fields[col_indices["pval"]]
             af_str = fields[col_indices["af"]]
 
+            af = float(af_str)
+
             # Effect type transformation (OR -> Beta)
             beta = float(beta_str)
             if eff_type == "or":
                 beta = math.log(beta)
-
-            # Standard Error transformation (CI -> SE)
-            if s_type == "ci":
-                ci_lower_str, ci_upper_str = se_str.split(',')
-                ci_lower = float(ci_lower_str)
-                ci_upper = float(ci_upper_str)
-                
-                if eff_type == "or":
-                    ci_lower = math.log(ci_lower)
-                    ci_upper = math.log(ci_upper)
-                
-                se = (ci_upper - ci_lower) / (2 * 1.96)
-            else:
-                se = float(se_str) # Already an SE
 
             # P-value transformation (mlog10p -> P)
             pval_raw = float(pval_str)
@@ -144,8 +160,35 @@ def process_file(f_in, args):
                     mlogp = -math.log10(pval)
                 else:
                     mlogp = float('inf')
+
+            se = None
+
+            # Recalculate SE if possible and requested
+            if args.recalculate_se:
+                if 0 < pval < 1:
+                    se = abs(beta / norm.isf(pval / 2))
+                elif pval == 0 and mlogp > 0 and mlogp != float('inf'):
+                    # P-value is too small to represent, but we have a valid mlogp
+                    se = estimate_se_from_mlogp(beta, mlogp)
+                else:
+                    if args.verbose:
+                        sys.stderr.write(f"Warning: Cannot recalculate SE for line {line_num+1} due to invalid p-value ({pval}) and/or mlogp ({mlogp}). Using reported SE\n")
+                        #raise ValueError(f"Invalid p-value ({pval}) and/or mlogp ({mlogp}) for SE recalculation.")
                 
-            af = float(af_str)
+            # Format SE if not recalculated
+            if not se:
+                if s_type == "ci": # Standard Error transformation (CI -> SE)
+                    ci_lower_str, ci_upper_str = se_str.split(',')
+                    ci_lower = float(ci_lower_str)
+                    ci_upper = float(ci_upper_str)
+                    
+                    if eff_type == "or":
+                        ci_lower = math.log(ci_lower)
+                        ci_upper = math.log(ci_upper)
+                    
+                    se = (ci_upper - ci_lower) / (2 * 1.96)
+                else:
+                    se = float(se_str) # Already an SE
 
             # Chromosome formatting
             chr_idx = col_indices["chr"]
@@ -158,7 +201,7 @@ def process_file(f_in, args):
                 chrom = "24"
             fields[chr_idx] = chrom
 
-            # Check for "TEST_FAIL"
+            # Check for "TEST_FAIL" in EXTRA column if it exists
             is_fail = False
             if extra_idx != -1 and fields[extra_idx] == "TEST_FAIL":
                 is_fail = True
@@ -187,21 +230,26 @@ def process_file(f_in, args):
                     af = 1.0 - af
 
                 # Update the fields list with transformed values
-                fields[col_indices["beta"]] = str(beta)
-                fields[col_indices["se"]] = str(se)
-                fields[col_indices["pval"]] = str(pval)
-                fields[col_indices["af"]] = str(af)
+                fields[col_indices["beta"]] = str(round(beta, args.rounding_precision))
+                fields[col_indices["se"]] = str(round(se, args.rounding_precision))
+                fields[col_indices["pval"]] = str(round(pval, args.rounding_precision))
+                fields[col_indices["af"]] = str(round(af, args.rounding_precision))
                 
                 # Format POS as an integer
                 fields[pos_idx] = str(int(float(fields[pos_idx])))
 
                 # Append the mlogp value
-                fields.append(str(mlogp))
+                fields.append(str(round(mlogp, args.rounding_precision)))
 
                 # Print the processed line
                 print("\t".join(fields))
 
                 ok_lines += 1
+            else:
+                filter_fail_lines += 1
+                if args.verbose:
+                    sys.stderr.write(f"Skipping line {line_num+1} due to QC failing: {line.strip(args.delim)}")
+                continue
 
         except (ValueError, IndexError, TypeError, ZeroDivisionError) as e:
             # Skip any lines that cause conversion or processing errors
@@ -209,7 +257,9 @@ def process_file(f_in, args):
             if args.verbose:
                 sys.stderr.write(f"Skipping bad line {line_num+1}: {line.strip(args.delim)}. Error: {e}\n")
             continue
-    sys.stderr.write(f"Finished processing. Skipped {error_lines} variants due to errors. Output {ok_lines} variants.\n")
+    sys.stderr.write(f"Finished processing. Skipped {error_lines} variants due to errors.\n")
+    sys.stderr.write(f"Filtered out {filter_fail_lines} variants due to failing QC.\n")
+    sys.stderr.write(f"Passed {ok_lines} variants.\n")
     
 
 def main():
@@ -241,7 +291,9 @@ def main():
     set_group.add_argument("--se-type", choices=['se', 'ci'], default='se', help="Type of error reported (standard error or confidence interval).")
     set_group.add_argument("--pval-type", choices=['p', 'mlog10p'], default='p', help="Type of p-value reported (raw p-value or -log10(p)).")
     set_group.add_argument("--af-allele", choices=['alt', 'ref'], default='alt', help="Allele described by the frequency in --af-col.")
-    set_group.add_argument("--flip-alleles", action='store_true', help="Set this flag to flip REF/ALT alleles and invert beta/AF.")
+    set_group.add_argument("--flip-alleles", action='store_true', help="Flip REF/ALT alleles and invert beta/AF.")
+    set_group.add_argument("--recalculate-se", action='store_true', help="Recalculate SE from beta and p-value.")
+    set_group.add_argument("--rounding-precision", type=int, default=4, help="Decimal places to round numeric outputs to.")
     
     set_group.add_argument("--filt-col", help="Name of the column to use for filtering.")
     set_group.add_argument("--filt-threshold", type=float, help="Rows with a value in --filt-col LESS than or EQUAL to this are removed.")
