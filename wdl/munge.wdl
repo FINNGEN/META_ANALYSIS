@@ -86,6 +86,7 @@ task clean_filter {
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
     String filt_option = if (defined(filt_col) && defined(filt_threshold)) then "--filt-col " + filt_col + " --filt-threshold " + filt_threshold else ""
+    String flip_option = if flip_alleles then "--flip-alleles" else ""
 
     command <<<
 
@@ -115,7 +116,7 @@ task clean_filter {
             --se-type ~{se_type} \
             --pval-type ~{pval_type} \
             --af-allele ~{af_allele} \
-            --flip-alleles ~{flip_alleles} \
+            ~{flip_option} \
             ~{filt_option} | \
             sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | \
             bgzip > ~{outfile}
