@@ -1,7 +1,8 @@
-test/
+test
 __pycache__
-.vscode/
+.vscode
 .DS_Store
 *.pyc
-wdl/
-data/
+wdl
+data
+.git
