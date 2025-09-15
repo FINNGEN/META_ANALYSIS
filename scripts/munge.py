@@ -232,7 +232,7 @@ def process_file(f_in, args):
                 # Update the fields list with transformed values
                 fields[col_indices["beta"]] = str(round(beta, args.rounding_precision))
                 fields[col_indices["se"]] = str(round(se, args.rounding_precision))
-                fields[col_indices["pval"]] = str(round(pval, args.rounding_precision))
+                fields[col_indices["pval"]] = f"{pval:.2e}"
                 fields[col_indices["af"]] = str(round(af, args.rounding_precision))
                 
                 # Format POS as an integer
