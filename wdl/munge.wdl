@@ -16,7 +16,7 @@ workflow munge {
         call clean_filter {
             input:
             sumstat_file = sumstat_file,
-            docker = common_docker
+            docker = meta_docker
         }
 
         if (liftover) {
@@ -85,7 +85,8 @@ task clean_filter {
     }
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
-    Boolean do_filter = defined(filt_col) && defined(filt_threshold)
+    String filt_option = if (defined(filt_col) && defined(filt_threshold)) then "--filt-col " + filt_col + " --filt-threshold " + filt_threshold else ""
+    String flip_option = if flip_alleles then "--flip-alleles" else ""
 
     command <<<
 
@@ -102,90 +103,33 @@ task clean_filter {
         pos_col=$(zcat -f ~{sumstat_file} | head -1 | tr '\t ' '\n' | grep -nx "~{pos_col}" | head -1 | cut -d ':' -f1)
         printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
-        zcat -f ~{sumstat_file} | awk ' \
-            BEGIN{
-                FS="\t| ";
-                OFS="\t";
-                effect_type=tolower("~{effect_type}");
-                se_type=tolower("~{se_type}");
-                pval_type=tolower("~{pval_type}");
-                flip="~{flip_alleles}";
-                filter="~{do_filter}";
-                af_allele="~{af_allele}";
-            }
-            NR==1 {
-                for (i=1;i<=NF;i++) {
-                    sub("^~{chr_col}$", "#CHR", $i);
-                    sub("^~{pos_col}$", "POS", $i);
-                    sub("^~{ref_col}$", "REF", $i);
-                    sub("^~{alt_col}$", "ALT", $i);
-                    sub("^~{af_col}$", "af_alt", $i);
-                    sub("^~{effect_col}$", "beta", $i);
-                    sub("^~{se_col}$", "sebeta", $i);
-                    sub("^~{pval_col}$", "pval", $i);
-                    a[$i]=i;
-                    if ($i=="POS") pos=i
-                }
-                sub(/(\t| )$/, "", $0);
-                print $0
-            } NR>1 {
-                if (filter=="true" && $a["~{filt_col}"] <= ~{default="0" filt_threshold}) {
-                    next
-                }
-                if (effect_type=="or") {
-                    $a["beta"]=log($a["beta"])
-                }
-                if (se_type=="ci") {
-                    split($a["sebeta"], ci, ",")
-                    if (effect_type=="or") {
-                        ci[1]=log(ci[1])
-                        ci[2]=log(ci[2])
-                    }
-                    $a["sebeta"]=(ci[2]-ci[1])/(2*1.96)
-                }
-                if (pval_type=="mlog10p") {
-                    $a["pval"]=10^(-$a["pval"])
-                }
-                sub("^0", "", $a["#CHR"]); sub("^chr", "", $a["#CHR"]); sub("^X", "23", $a["#CHR"]); sub("^Y", "24", $a["#CHR"]);
-                if ($a["#CHR"] ~ /^[0-9]+$/ && $a["pval"] > 0 && $a["pval"] < 1 && $a["beta"] < 1e6 && $a["beta"] > -1e6 && $a["beta"] != 0 && $a["af_alt"]>0 && (1-$a["af_alt"])>0 && $a["sebeta"] > 0 && $a["EXTRA"]!="TEST_FAIL") {
-                    if (flip=="true") {
-                        tmp=$a["REF"];
-                        $a["REF"]=$a["ALT"];
-                        $a["ALT"]=tmp;
-                        $a["beta"]=-1*$a["beta"];
-                        $a["af_alt"]=1-$a["af_alt"];
-                    }
-                    if (af_allele=="ref") {
-                        $a["af_alt"]=1-$a["af_alt"];
-                    }
-                    printf $1;
-                    for (i=2; i<=NF; i++) {
-                        if (i==pos) {
-                            printf "\t%d", $i
-                        } else {
-                            printf "\t"$i
-                        }
-                    }
-                    printf "\n"
-                }
-            }' | \
-        sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | \
-        bgzip > ~{outfile}
+        munge.py ~{sumstat_file} \
+            --chr-col ~{chr_col} \
+            --pos-col ~{pos_col} \
+            --ref-col ~{ref_col} \
+            --alt-col ~{alt_col} \
+            --af-col ~{af_col} \
+            --effect-col ~{effect_col} \
+            --se-col ~{se_col} \
+            --pval-col ~{pval_col} \
+            --effect-type ~{effect_type} \
+            --se-type ~{se_type} \
+            --pval-type ~{pval_type} \
+            --af-allele ~{af_allele} \
+            ~{flip_option} \
+            ~{filt_option} | \
+            sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | \
+            bgzip > ~{outfile}
+        
         tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ~{outfile}
 
-        echo "`date` new number of variants"
-        gunzip -c ~{outfile} | tail -n+2 | wc -l
         echo "`date` headers"
-        gunzip -c ~{outfile} | head -1 | tr '\t' '\n'
+        gunzip -c ~{outfile} | head -1 | tr '\t' '\n' | nl
 
         tabix -l ~{outfile} > chr.tmp
         echo "`date` $(wc -l chr.tmp | cut -d' ' -f1) chromosomes"
         cat chr.tmp
 
-        echo "`date` unique number of fields"
-        gunzip -c ~{outfile} | awk 'BEGIN{FS="\t"} {print NF}' | sort -u > n.tmp
-        cat n.tmp
-        if [ $(wc -l n.tmp | cut -d' ' -f1) != 1 ]; then echo "file not square"; exit 1; fi
         if [ $(wc -l chr.tmp | cut -d' ' -f1) -lt 22 ]; then echo "less than 22 chromosomes"; exit 1; fi
 
         echo "`date` done"
@@ -440,7 +384,7 @@ task lift_postprocess {
 
         EOF
 
-        tabix -S 1 -s $chr_col -b $pos_col -e $pos_col ~{base}.tsv.gz
+        tabix -s $chr_col -b $pos_col -e $pos_col ~{base}.tsv.gz
 
     >>>
 
@@ -453,7 +397,7 @@ task lift_postprocess {
         docker: "~{docker}"
         cpu: "1"
         memory: "2 GB"
-        disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"
+        disks: "local-disk " + (5 * (ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + 1)) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
         noAddress: true
