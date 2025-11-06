@@ -133,7 +133,7 @@ def process_file(f_in, args):
                 if filt_val <= filt_threshold: # Filter failed, skip this line
                     filter_fail_lines += 1
                     if args.verbose:
-                        sys.stderr.write(f"Skipping line {line_num+1} due to filter ({filt_val} <= {filt_threshold}): {line.strip(args.delim)}")
+                        sys.stderr.write(f"Skipping line {line_num+1} due to filter ({filt_val} <= {filt_threshold}): {line.strip()}")
                     continue
 
             # Get key values that need transformation
@@ -248,14 +248,14 @@ def process_file(f_in, args):
             else:
                 filter_fail_lines += 1
                 if args.verbose:
-                    sys.stderr.write(f"Skipping line {line_num+1} due to QC failing: {line.strip(args.delim)}")
+                    sys.stderr.write(f"Skipping line {line_num+1} due to QC failing: {line.strip()}")
                 continue
 
         except (ValueError, IndexError, TypeError, ZeroDivisionError) as e:
             # Skip any lines that cause conversion or processing errors
             error_lines += 1
             if args.verbose:
-                sys.stderr.write(f"Skipping bad line {line_num+1}: {line.strip(args.delim)}. Error: {e}\n")
+                sys.stderr.write(f"Skipping bad line {line_num+1}: {line.strip()}. Error: {e}\n")
             continue
     sys.stderr.write(f"Finished processing. Skipped {error_lines} variants due to errors.\n")
     sys.stderr.write(f"Filtered out {filter_fail_lines} variants due to failing QC.\n")
