@@ -305,7 +305,7 @@ def main():
     args = parser.parse_args()
 
     # --- Input Validation ---
-    if args.filt_col and not args.filt_threshold or args.filt_threshold and not args.filt_col:
+    if (args.filt_col and not args.filt_threshold) or (args.filt_threshold and not args.filt_col):
         parser.error("Both --filt-col and --filt-threshold must be provided together to enable filtering.")
 
     # --- File Handling ---
