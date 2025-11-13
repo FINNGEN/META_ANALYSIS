@@ -267,6 +267,7 @@ task plots {
         String pval_thresholds
         String pvals_to_plot
         String af_col_suffix
+        String miami_pval_cols
 
         String base = basename(meta_file, ".tsv.gz")
     }
@@ -294,6 +295,12 @@ task plots {
         --chrcol "#CHR" \
         --pval_col ~{pvals_to_plot} \
         --loglog_ylim ~{loglog_ylim}
+
+        miami.R --file ~{base} \
+        --pos_col "POS" \
+        --chr_col "#CHR" \
+        --pval_cols ~{miami_pval_cols} \
+        --highlight
 
     >>>
 
