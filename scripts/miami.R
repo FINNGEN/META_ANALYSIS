@@ -25,7 +25,7 @@ option_list <- list(
   make_option(c("--pos_col"), type = "character", default = "POS",
               help = "pos column [default= %default]",
               metavar = "character"),
-  make_option(c("-p", "--pval_cols"), type = "character", default = "P",
+  make_option(c("-p", "--pval_cols"), type = "character",
               help = "Two p-value columns, comma-separated",
               metavar = "character"),
   make_option("--pvalue_type", type = "character", default = "detect",
