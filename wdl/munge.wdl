@@ -75,18 +75,10 @@ task clean_filter {
         String effect_col
         String se_col
         String pval_col
-        String effect_type
-        String se_type
-        String pval_type
-        String af_allele = "alt"
-        Boolean flip_alleles
-        String? filt_col
-        Float? filt_threshold
+        String options
     }
 
     String outfile = sub(basename(sumstat_file, ".gz"), "\\.bgz$", "") + ".munged.tsv.gz"
-    String filt_option = if (defined(filt_col) && defined(filt_threshold)) then "--filt-col " + filt_col + " --filt-threshold " + filt_threshold else ""
-    String flip_option = if flip_alleles then "--flip-alleles" else ""
 
     command <<<
 
@@ -104,20 +96,15 @@ task clean_filter {
         printf "`date` col CHR "${chr_col}" col POS "${pos_col}"\n"
 
         munge.py ~{sumstat_file} \
-            --chr-col ~{chr_col} \
-            --pos-col ~{pos_col} \
-            --ref-col ~{ref_col} \
-            --alt-col ~{alt_col} \
-            --af-col ~{af_col} \
-            --effect-col ~{effect_col} \
-            --se-col ~{se_col} \
-            --pval-col ~{pval_col} \
-            --effect-type ~{effect_type} \
-            --se-type ~{se_type} \
-            --pval-type ~{pval_type} \
-            --af-allele ~{af_allele} \
-            ~{flip_option} \
-            ~{filt_option} | \
+            --chr-col "~{chr_col}" \
+            --pos-col "~{pos_col}" \
+            --ref-col "~{ref_col}" \
+            --alt-col "~{alt_col}" \
+            --af-col "~{af_col}" \
+            --effect-col "~{effect_col}" \
+            --se-col "~{se_col}" \
+            --pval-col "~{pval_col}" \
+            ~{options} | \
             sort -k$chr_col,${chr_col}g -k$pos_col,${pos_col}g | \
             bgzip > ~{outfile}
         
