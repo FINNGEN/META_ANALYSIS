@@ -154,7 +154,7 @@ The script performs the following transformations:
 
 * Standardizes column names to `#CHR`, `POS`, `REF`, `ALT`, `af_alt`, `beta`, `sebeta`, `pval`
 * Converts OR to log(OR) if `--effect-type or` is specified
-* Converts CI to SE if `--se-type ci` is specified
+* Converts CI to SE if `--se-type ci` is specified. Note that CI is assumed to be 95% and formatted as `[lower],[upper]`
 * Calculates `-log10(p)` and adds it as `mlogp` column
 * Applies QC filters (valid chromosomes, p-values in [0,1], non-zero betas, valid allele frequencies)
 * Optionally filters based on custom column thresholds
