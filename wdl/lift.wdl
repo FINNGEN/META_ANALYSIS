@@ -93,7 +93,6 @@ task sumstat_to_vcf {
 
         with gzip.open(sumstat, 'rt') as f:
             h_idx = {h:i for i,h in enumerate(f.readline().strip().split(delim))}
-            h_idx = defaultdict(lambda: 1e9, h_idx)
 
             for line in f:
                 s = line.strip().split(delim)
@@ -236,7 +235,6 @@ task lift_postprocess {
         s_f = gzip.open(sumstat, 'rt')
         sumstat_header = s_f.readline().strip().split(delim)
         sumstat_h_idx = {h:i for i,h in enumerate(sumstat_header)}
-        sumstat_h_idx = defaultdict(lambda: None, sumstat_h_idx)
         sumstat_header.extend(['b37_chr', 'b37_pos', 'b37_ref', 'b37_alt', 'liftover_info'])
         print(delim.join(sumstat_header))
         sumstat_chr = 0
