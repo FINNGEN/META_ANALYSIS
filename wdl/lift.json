@@ -1,16 +1,16 @@
 {
-    "liftover.sumstats_loc": "gs://juham-fg/lift/test/test_sumstats.txt",
+    "liftover.sumstats_loc": "gs://pan-ukbb-us-data/liftover/test/test_sumstats.txt",
     "liftover.delim": "\t",
-    "liftover.chr_col": "chr",
+    "liftover.chr_col": "#chrom",
     "liftover.pos_col": "pos",
     "liftover.ref_col": "ref",
     "liftover.alt_col": "alt",
-    "liftover.af_col": "af_controls_EUR",
-    "liftover.beta_col": "beta_EUR",
-    "liftover.sumstat_to_vcf.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7",
-    "liftover.lift.docker": "eu.gcr.io/finngen-refinery-dev/picard:2.25.6",
-    "liftover.lift.chainfile": "gs://juham-fg/lift/chainfiles/hg19ToHg38.over.chain.gz",
-    "liftover.lift.b38_assembly_fasta": "gs://juham-fg/lift/broad/Homo_sapiens_assembly38.fasta",
-    "liftover.lift.b38_assembly_dict": "gs://juham-fg/lift/broad/Homo_sapiens_assembly38.dict",
-    "liftover.lift_postprocess.docker": "eu.gcr.io/finngen-refinery-dev/bioinformatics:0.7"
+    "liftover.af_col": "af_alt",
+    "liftover.beta_col": "beta",
+    "liftover.sumstat_to_vcf.docker": "gcr.io/phewas-development/bioinformatics:0.8.2",
+    "liftover.lift.docker": "gcr.io/phewas-development/picard:2.25.6",
+    "liftover.lift.chainfile": "gs://pan-ukbb-us-data/liftover/chainfiles/hg19ToHg38.over.chain.gz",
+    "liftover.lift.b38_assembly_fasta": "gs://pan-ukbb-us-data/liftover/broad/Homo_sapiens_assembly38.fasta",
+    "liftover.lift.b38_assembly_dict": "gs://pan-ukbb-us-data/liftover/broad/Homo_sapiens_assembly38.dict",
+    "liftover.lift_postprocess.docker": "gcr.io/phewas-development/bioinformatics:0.8.2"
 }

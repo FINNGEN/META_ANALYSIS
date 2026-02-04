@@ -136,7 +136,7 @@ task sumstat_to_vcf {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-b us-east1-c us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -182,7 +182,7 @@ task lift {
         cpu: "1"
         memory: "32 GB"
         disks: "local-disk " + 10*ceil(size(sumstat_vcf, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-b us-east1-c us-east1-d"
         preemptible: 2
         noAddress: true
     }
@@ -319,7 +319,7 @@ task lift_postprocess {
         cpu: "1"
         memory: "2 GB"
         disks: "local-disk " + 4*ceil(size(lifted_vcf, "G") + size(sumstat_file, "G")) + " HDD"
-        zones: "europe-west1-b europe-west1-c europe-west1-d"
+        zones: "us-east1-b us-east1-c us-east1-d"
         preemptible: 2
         noAddress: true
     }
