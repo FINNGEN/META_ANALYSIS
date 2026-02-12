@@ -31,7 +31,7 @@ def generate_json(data, h_idx, columns, studies, continuous):
             "effect": columns["studies"][study]["effect"],
             "effect_type": columns["studies"][study]["effect_type"],
             "pval": columns["studies"][study]["pval"],
-            "extra_cols": columns["studies"][study]["extra_cols"]
+            "extra_cols": columns["studies"][study].get("extra_cols", [])
         }
         if "se" in columns["studies"][study]:
             study_conf["se"] = columns["studies"][study]["se"]
@@ -50,6 +50,7 @@ def categorize_columns(header, args):
         with open(args.study_cols_json, "r") as f:
             columns["studies"] = json.load(f)
     else:
+        columns["studies"] = {}
         for s in args.studies:
             columns["studies"][s] = {
                 "chr": "#CHR",
