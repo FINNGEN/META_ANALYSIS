@@ -56,7 +56,7 @@ workflow meta_analysis {
 
     call gather_qc {
         input:
-            qc = plots.qc,
+            qc = plots.qc_files,
             docker = docker
     }
 
@@ -65,10 +65,11 @@ workflow meta_analysis {
         Array[File] metas_with_rsids = add_rsids.meta_out
         Array[File] filtered_metas = post_filter.filtered_meta_out
         Array[Array[File]] pngs = plots.pngs
-        Array[Array[File]] pdfs = plots.pdfs
+        Array[Array[File]] qc_plots = plots.qc_plots
         Array[Array[File]] lambdas = plots.lambdas
-        Array[Array[File]] qc = plots.qc
+        Array[Array[File]] qc_files = plots.qc_files
         Array[Array[File]] qc_hits = plots.hits
+        Array[Array[File]] forest_plots = plots.forest_plots
         Array[File] gathered_qc = gather_qc.qcs
         File qc_xlsx = gather_qc.qc_xlsx
     }
@@ -263,7 +264,7 @@ task plots {
         String pheno
         String docker
 
-        Int loglog_ylim
+        Int? loglog_ylim
         String pval_thresholds
         String pvals_to_plot
         String af_col_suffix
@@ -294,7 +295,7 @@ task plots {
         --bp_col "POS" \
         --chrcol "#CHR" \
         --pval_col ~{pvals_to_plot} \
-        --loglog_ylim ~{loglog_ylim}
+        ${if defined(loglog_ylim) then "--loglog_ylim " + loglog_ylim else ""}
 
         miami.R --file ~{base} \
         --pos_col "POS" \
@@ -306,15 +307,16 @@ task plots {
 
     output {
         Array[File] pngs = glob("*.png")
-        Array[File] pdfs = glob("*.pdf")
+        Array[File] qc_plots = glob("*qc.pdf")
         Array[File] lambdas = glob("*.txt")
-        Array[File] qc = glob("*.tsv")
-        Array[File] hits = glob("*.hits")
+        Array[File] qc_files = glob("*qc.tsv")
+        Array[File] hits = glob("*qc.hits")
+        Array[File] forest_plots = glob("*.forest_plots.pdf")
     }
 
     runtime {
         docker: "~{docker}"
-        cpu: "2"
+        cpu: 2
         memory: "20 GB"
         disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
@@ -353,7 +355,7 @@ task post_filter {
 
     runtime {
         docker: "~{docker}"
-        cpu: "1"
+        cpu: 1
         memory: "2 GB"
         disks: "local-disk " + 3*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
