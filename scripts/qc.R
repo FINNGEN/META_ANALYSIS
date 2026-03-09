@@ -442,7 +442,7 @@ for (pval_thresh_i in pval_thresh) {
     theme(axis.title = element_text(size = 7),
           axis.text = element_text(size = 7))
 
-  ggsave(filename = paste0(output_prefix, "qc.pdf"),
+  ggsave(filename = paste0(output_prefix, ".qc.pdf"),
          plot = plots_arranged,
          device = "pdf",
          dpi = 300,
