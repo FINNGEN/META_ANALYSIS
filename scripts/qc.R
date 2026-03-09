@@ -133,7 +133,7 @@ for (pval_thresh_i in pval_thresh) {
   
   message("Calculating qc metrics with p-value threshold ", pval_thresh_i, " ...")
   
-  output_prefix <- paste0(ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out), pval_thresh_i)
+  output_prefix <- paste(ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out), pval_thresh_i, sep = ".")
   
   qc_dt_i <- copy(qc_dt)
   

@@ -295,7 +295,7 @@ task plots {
         --bp_col "POS" \
         --chrcol "#CHR" \
         --pval_col ~{pvals_to_plot} \
-        ${if defined(loglog_ylim) then "--loglog_ylim " + loglog_ylim else ""}
+        ~{if defined(loglog_ylim) then "--loglog_ylim " + loglog_ylim else ""}
 
         miami.R --file ~{base} \
         --pos_col "POS" \
@@ -317,7 +317,8 @@ task plots {
     runtime {
         docker: "~{docker}"
         cpu: 2
-        memory: "20 GB"
+        memory: "26 GB"
+        bootDiskSizeGb: 30
         disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
         preemptible: 2
@@ -381,7 +382,7 @@ task gather_qc {
         suppressPackageStartupMessages(library(data.table))
 
         files <- strsplit(x = "~{sep=" " qcs}", split = " ")[[1]]
-        files_list <- split(files, gsub(".*[.]qc[.]|[.]tsv", "", files))
+        files_list <- split(files, gsub(".*[.]", "", gsub("[.]qc[.]tsv$", "", files)))
 
         merged_list <- lapply(files_list, function(x) {
             do.call(rbind, c(lapply(x, fread), fill = T))
