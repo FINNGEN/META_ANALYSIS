@@ -262,11 +262,13 @@ for (pval_thresh_i in pval_thresh) {
   # Prepare all beta and sebeta columns to plot
   beta_cols_to_plot <- c(study_beta_cols, meta_beta_col)
   sebeta_cols_to_plot <- c(study_sebeta_cols, meta_sebeta_col)
+  p_cols_to_plot <- c(study_pval_cols, meta_pval_col)
   study_labels <- c(studies, "META")
   
   if (leave) {
     beta_cols_to_plot <- c(beta_cols_to_plot, leave_beta_cols)
     sebeta_cols_to_plot <- c(sebeta_cols_to_plot, leave_sebeta_cols)
+    p_cols_to_plot <- c(p_cols_to_plot, leave_pval_cols)
     study_labels <- c(study_labels, paste("leave", studies, sep = "_"))
   }
   
@@ -280,7 +282,8 @@ for (pval_thresh_i in pval_thresh) {
     plot_data <- data.table(
       study = study_labels,
       beta = as.numeric(variant[, ..beta_cols_to_plot]),
-      sebeta = as.numeric(variant[, ..sebeta_cols_to_plot])
+      sebeta = as.numeric(variant[, ..sebeta_cols_to_plot]),
+      pval = as.numeric(variant[, ..p_cols_to_plot])
     )
     
     # Remove rows with missing data
@@ -290,16 +293,23 @@ for (pval_thresh_i in pval_thresh) {
     plot_data[, lower := beta - 1.96 * sebeta]
     plot_data[, upper := beta + 1.96 * sebeta]
     
+    # Format p-values for display
+    plot_data[, pval_label := ifelse(pval < 1e-300, "< 1e-300", 
+                       ifelse(pval < 0.001, format(pval, scientific = TRUE, digits = 2),
+                          format(pval, digits = 3)))]
+    
     # Create and print forest plot
     p <- ggplot(plot_data, aes(x = beta, y = study)) +
       geom_point(size = 3) +
       geom_errorbarh(aes(xmin = lower, xmax = upper), height = 0.2) +
       geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+      geom_text(aes(label = pval_label), x = Inf, hjust = -0.1, size = 3) +
       labs(title = variant_id, x = "Beta", y = "Study") +
       theme_bw() +
       theme(axis.title = element_text(size = 10),
-            axis.text = element_text(size = 9),
-            plot.title = element_text(size = 11, face = "bold"))
+        axis.text = element_text(size = 9),
+        plot.title = element_text(size = 11, face = "bold"),
+        plot.margin = margin(r = 80))
     
     print(p)
   }
