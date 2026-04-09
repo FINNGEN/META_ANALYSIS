@@ -8,6 +8,8 @@ import subprocess
 import shlex
 import gzip
 
+JSONS_DIR = "jsons"
+
 def format_int(val):
     try:
         return int(val)
@@ -37,7 +39,7 @@ def generate_json(data, h_idx, columns, studies, continuous):
             study_conf["se"] = columns["studies"][study]["se"]
         confs.append(study_conf)
 
-    json_file = "jsons/" + data[h_idx[columns["phenotype"]]] + ".json" if os.path.isdir("jsons") else data[h_idx[columns["phenotype"]]] + ".json"
+    json_file = JSONS_DIR + "/" + data[h_idx[columns["phenotype"]]] + ".json" if os.path.isdir(JSONS_DIR) else data[h_idx[columns["phenotype"]]] + ".json"
     with open(json_file, "w") as out:
         json.dump({"meta": confs}, out, indent=4)
 
@@ -103,7 +105,7 @@ def run():
     print("Skipping phenotypes with names as 'NA'...")
 
     try:
-        os.mkdir("jsons")
+        os.mkdir(JSONS_DIR)
     except OSError as error:
         print(error)
 
@@ -132,13 +134,13 @@ def run():
             f_out.write("\t".join(links) + "\n")
             generate_json(d, h_idx, columns, pheno_studies, args.continuous)
             if args.bucket is not None:
-                f_out_json.write(os.path.join(args.bucket, "jsons", d[h_idx[columns["phenotype"]]]) + ".json\n")
+                f_out_json.write(os.path.join(args.bucket, JSONS_DIR, d[h_idx[columns["phenotype"]]]) + ".json\n")
 
     if args.bucket is not None:
         print(f"Transferring files to bucket {args.bucket} ...")
-        cmd_1 = f"gsutil -q cp {args.sumstat_filelist_name} {args.bucket}"
-        cmd_2 = f"gsutil -q cp {args.json_filelist_name} {args.bucket}"
-        cmd_3 = f"gsutil -q -m cp -r jsons/ {args.bucket}"
+        cmd_1 = f"gcloud storage cp {args.sumstat_filelist_name} {args.bucket}"
+        cmd_2 = f"gcloud storage cp {args.json_filelist_name} {args.bucket}"
+        cmd_3 = f"gcloud storage cp -r {JSONS_DIR}/ {args.bucket}"
         subprocess.run(shlex.split(cmd_1))
         subprocess.run(shlex.split(cmd_2))
         subprocess.run(shlex.split(cmd_3))
