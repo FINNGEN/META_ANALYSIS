@@ -61,10 +61,9 @@ check_wdl () {
     for option in "${options[@]}"; do
         check_options "$option" || ok=false
     done
-    if [ -d "$dir/input_files" ]; then
-        for json in $(find "$dir/input_files" -name '*.json' -type f); do
-            check_input "$wdl" "$json" "${check[@]}" || ok=false
-        done
+    local -r json_file="$dir/$prefix.json"
+    if [ -f "$json_file" ]; then
+        check_input "$wdl" "$json_file" "${check[@]}" || ok=false
     fi
     $ok
 }
