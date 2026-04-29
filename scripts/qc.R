@@ -289,6 +289,12 @@ for (pval_thresh_i in pval_thresh) {
     # Remove rows with missing data
     plot_data <- na.omit(plot_data)
     
+    # Reorder study factor to place META at the bottom
+    if ("META" %in% plot_data$study) {
+      other_studies <- setdiff(plot_data$study, "META")
+      plot_data[, study := factor(study, levels = c("META", other_studies))]
+    }
+    
     # Calculate confidence intervals
     plot_data[, lower := beta - 1.96 * sebeta]
     plot_data[, upper := beta + 1.96 * sebeta]
@@ -298,18 +304,27 @@ for (pval_thresh_i in pval_thresh) {
                        ifelse(pval < 0.001, format(pval, scientific = TRUE, digits = 2),
                           format(pval, digits = 3)))]
     
+    # Calculate x position for p-value labels and axis limits
+    x_min <- min(plot_data$lower, na.rm = TRUE)
+    x_max <- max(plot_data$upper, na.rm = TRUE)
+    x_range <- x_max - x_min
+    text_x <- x_max + x_range * 0.15
+    x_limit <- x_max + x_range * 0.35
+    
     # Create and print forest plot
     p <- ggplot(plot_data, aes(x = beta, y = study)) +
       geom_point(size = 3) +
       geom_errorbarh(aes(xmin = lower, xmax = upper), height = 0.2) +
       geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
-      geom_text(aes(label = pval_label), x = Inf, hjust = -0.1, size = 3) +
+      geom_text(aes(label = pval_label), x = text_x, hjust = 0, size = 3) +
+      scale_x_continuous(limits = c(x_min - x_range * 0.05, x_limit)) +
       labs(title = variant_id, x = "Beta", y = "Study") +
+      coord_cartesian(clip = "off") +
       theme_bw() +
       theme(axis.title = element_text(size = 10),
         axis.text = element_text(size = 9),
         plot.title = element_text(size = 11, face = "bold"),
-        plot.margin = margin(r = 80))
+        plot.margin = margin(r = 100))
     
     print(p)
   }
