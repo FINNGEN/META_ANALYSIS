@@ -552,7 +552,7 @@ def get_studies(conf:str, chrom, sep, flip_indels) -> List[Study]:
 
     return [ Study(s, chrom, sep, flip_indels) for s in studies_conf["meta"]]
 
-def format_num(num, precision=2):
+def format_num(num, precision=6):
     return "NA" if num is None or numpy.isnan(num) else numpy.format_float_scientific(num, precision=precision)
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[Tuple] :
@@ -571,9 +571,9 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     for m in met:
         if m is not None:
             if is_het_test:
-                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2), format_num(het_test(m[4], m[5], m[0]))))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 6), format_num(het_test(m[4], m[5], m[0]))))
             else:
-                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2)))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 6)))
         else:
             meta_res.append(None)
 
