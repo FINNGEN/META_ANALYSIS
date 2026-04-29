@@ -8,8 +8,10 @@ cat("MASTER TEST RUNNER FOR R SCRIPTS\n")
 cat("================================================================================\n\n")
 
 # Change to scripts directory
-script_dir <- dirname(sys.frame(1)$ofile)
-if (script_dir != "") {
+args <- commandArgs(trailingOnly = FALSE)
+file_flag <- grep("--file=", args, value = TRUE)
+if (length(file_flag) > 0) {
+  script_dir <- dirname(normalizePath(sub("--file=", "", file_flag)))
   setwd(script_dir)
 }
 
