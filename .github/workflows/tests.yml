@@ -1,10 +1,10 @@
-name: CI
+name: tests
 
 on:
   push:
-    branches: ['**']
+    branches: [master, main]
   pull_request:
-    branches: [master]
+    branches: [master, main]
 
 jobs:
   test-r:
