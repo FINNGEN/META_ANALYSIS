@@ -357,8 +357,10 @@ main <- function() {
   cat("========================================\n")
   
   # Change to scripts directory if not already there
-  script_dir <- dirname(sys.frame(1)$ofile)
-  if (script_dir != "") {
+  args <- commandArgs(trailingOnly = FALSE)
+  file_flag <- grep("--file=", args, value = TRUE)
+  if (length(file_flag) > 0) {
+    script_dir <- dirname(normalizePath(sub("--file=", "", file_flag)))
     setwd(file.path(script_dir, ".."))
   }
   
