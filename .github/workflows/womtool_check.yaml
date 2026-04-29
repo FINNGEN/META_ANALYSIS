@@ -1,0 +1,26 @@
+
+# This workflow validates all pipeline WDL files using the 'womtool' tool.
+# Adapted from https://github.com/broadinstitute/warp/blob/develop/.github/workflows/womtool_check.yml
+name: WomtoolCheck
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  validate_wdl_job:
+    runs-on: ubuntu-latest
+    name: Validate all wdl using womtool
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-11-jre-headless jq
+
+      - name: Run womtools
+        run: |
+          ./scripts/validate_wdls.sh
