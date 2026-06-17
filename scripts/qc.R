@@ -101,11 +101,11 @@ keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols,
                study_beta_cols, meta_beta_col,
                het_p_col)
 
-if (weighted) {
-  study_sebeta_cols <- sapply(conf$meta, function(x) paste(x$name, x$se, sep = "_"))
-  meta_sebeta_col <- paste("all", method, "meta_sebeta", sep = "_")
-  keep_cols <- c(keep_cols, study_sebeta_cols, meta_sebeta_col)
-}
+# SE columns are needed for forest plots and beta-vs-beta fits regardless of
+# weighting; only the regression weighting itself is gated on `weighted`.
+study_sebeta_cols <- sapply(conf$meta, function(x) paste(x$name, x$se, sep = "_"))
+meta_sebeta_col <- paste("all", method, "meta_sebeta", sep = "_")
+keep_cols <- c(keep_cols, study_sebeta_cols, meta_sebeta_col)
 
 if (leave) {
   # Only keep per-study leave-one-out columns that actually exist in the file.
