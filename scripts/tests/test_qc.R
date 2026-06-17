@@ -300,9 +300,11 @@ test_qc_custom_pval_thresh <- function() {
   }
   
   # Check that QC files exist for custom thresholds
+  # qc.R names output files using the numeric threshold as R formats it
+  # (1e-4 -> "1e-04"), not as a decimal string.
   expected_qc_files <- c(
     paste0(output_prefix, ".1e-05.qc.tsv"),
-    paste0(output_prefix, ".0.0001.qc.tsv")
+    paste0(output_prefix, ".1e-04.qc.tsv")
   )
   
   for (qc_file in expected_qc_files) {
@@ -415,7 +417,10 @@ main <- function() {
   file_flag <- grep("--file=", args, value = TRUE)
   if (length(file_flag) > 0) {
     script_dir <- dirname(normalizePath(sub("--file=", "", file_flag)))
-    setwd(file.path(script_dir, ".."))
+    # The qc.R invocations below use the path "../qc.R", which resolves from
+    # this tests directory (../qc.R -> scripts/qc.R). Stay here rather than
+    # moving up to scripts/.
+    setwd(script_dir)
   }
   
   tests <- list(
@@ -435,7 +440,8 @@ main <- function() {
       passed <- passed + 1
     }, error = function(e) {
       cat("✗ Test failed:", conditionMessage(e), "\n")
-      failed <- failed + 1
+      # <<- so the counter in the enclosing main() is updated, not a local copy
+      failed <<- failed + 1
     })
   }
   
