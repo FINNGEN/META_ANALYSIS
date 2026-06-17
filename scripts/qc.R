@@ -108,13 +108,25 @@ if (weighted) {
 }
 
 if (leave) {
-  leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
-  leave_beta_cols <- paste("leave", studies, method, "meta_beta", sep = "_")
-  leave_sebeta_cols <- paste("leave", studies, method, "meta_sebeta", sep = "_")
+  # Only keep per-study leave-one-out columns that actually exist in the file.
+  # The --loo flag may be set whenever any "leave_" column is present (incl.
+  # leave-one-cohort-out / leave-one-population-out columns), so the per-study
+  # columns are not guaranteed to exist; intersect with the header to be safe.
+  file_hdr <- names(fread(file, header = T, nrows = 0))
+  leave_pval_cols <- intersect(paste("leave", studies, method, "meta_p", sep = "_"), file_hdr)
+  leave_beta_cols <- intersect(paste("leave", studies, method, "meta_beta", sep = "_"), file_hdr)
+  leave_sebeta_cols <- intersect(paste("leave", studies, method, "meta_sebeta", sep = "_"), file_hdr)
   #leave_het_p_cols <- paste("leave", studies, method, "meta_het_p", sep = "_")
-  keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols, leave_sebeta_cols)
-  pval_cols <- c(pval_cols, leave_pval_cols)
-  meta_pval_cols <- c(meta_pval_cols, leave_pval_cols)
+  if (length(leave_pval_cols) == 0) {
+    # --loo may have been set by leave-one-cohort/population-out columns alone;
+    # there are no per-study leave-one-out columns to plot, so skip LOO QC.
+    message("Skipping leave-one-out plotting as no per-study leave_*_meta_p columns are present")
+    leave <- F
+  } else {
+    keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols, leave_sebeta_cols)
+    pval_cols <- c(pval_cols, leave_pval_cols)
+    meta_pval_cols <- c(meta_pval_cols, leave_pval_cols)
+  }
 }
 
 message("Reading file ", file, " ...")
