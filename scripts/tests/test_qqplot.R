@@ -361,7 +361,10 @@ main <- function() {
   file_flag <- grep("--file=", args, value = TRUE)
   if (length(file_flag) > 0) {
     script_dir <- dirname(normalizePath(sub("--file=", "", file_flag)))
-    setwd(file.path(script_dir, ".."))
+    # qqplot.R is invoked as "../qqplot.R", which resolves from this tests
+    # directory (../qqplot.R -> scripts/qqplot.R). Stay here, don't move to
+    # scripts/.
+    setwd(script_dir)
   }
   
   tests <- list(
@@ -381,7 +384,8 @@ main <- function() {
       passed <- passed + 1
     }, error = function(e) {
       cat("✗ Test failed:", conditionMessage(e), "\n")
-      failed <- failed + 1
+      # <<- so the counter in the enclosing main() is updated, not a local copy
+      failed <<- failed + 1
     })
   }
   

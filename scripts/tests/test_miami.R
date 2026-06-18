@@ -156,7 +156,7 @@ test_miami_auto_detect <- function() {
   # Run miami.R with detect mode
   cat("Running miami.R with auto-detect...\n")
   cmd <- sprintf(
-    "Rscript miami.R --file %s --out %s --pval_cols pval1,pval2 --pvalue_type detect",
+    "Rscript ../miami.R --file %s --out %s --pval_cols pval1,pval2 --pvalue_type detect",
     test_file, output_prefix
   )
   
@@ -292,7 +292,10 @@ main <- function() {
   file_flag <- grep("--file=", args, value = TRUE)
   if (length(file_flag) > 0) {
     script_dir <- dirname(normalizePath(sub("--file=", "", file_flag)))
-    setwd(file.path(script_dir, ".."))
+    # miami.R is invoked as "../miami.R", which resolves from this tests
+    # directory (../miami.R -> scripts/miami.R). Stay here, don't move to
+    # scripts/.
+    setwd(script_dir)
   }
   
   tests <- list(
@@ -312,7 +315,8 @@ main <- function() {
       passed <- passed + 1
     }, error = function(e) {
       cat("✗ Test failed:", conditionMessage(e), "\n")
-      failed <- failed + 1
+      # <<- so the counter in the enclosing main() is updated, not a local copy
+      failed <<- failed + 1
     })
   }
   
