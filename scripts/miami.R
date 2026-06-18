@@ -113,7 +113,7 @@ if (highlight) {
   hilight_snps2 <- NULL
 }
 
-png(paste(output_prefix, pcol, "miami.png", sep = "_"), 1300, 800)
+png(paste(output_prefix, pval_cols[1], "miami.png", sep = "_"), 1300, 800)
 par(mfrow = c(2, 1))
 par(mar = c(1, 6, 3, 3))
 manhattan(data,
