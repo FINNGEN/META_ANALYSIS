@@ -37,6 +37,11 @@ def generate_json(data, h_idx, columns, studies, continuous):
         }
         if "se" in columns["studies"][study]:
             study_conf["se"] = columns["studies"][study]["se"]
+        # Optional grouping metadata, passed through for leave-one-cohort-out /
+        # leave-one-population-out in meta_analysis.py. Omitted if not given.
+        for f in ("cohort", "population"):
+            if f in columns["studies"][study]:
+                study_conf[f] = columns["studies"][study][f]
         confs.append(study_conf)
 
     json_file = JSONS_DIR + "/" + data[h_idx[columns["phenotype"]]] + ".json" if os.path.isdir(JSONS_DIR) else data[h_idx[columns["phenotype"]]] + ".json"
@@ -48,8 +53,8 @@ def get_studies(header, link_suffix):
 
 def categorize_columns(header, args):
     columns = {}
-    if args.study_cols_json:
-        with open(args.study_cols_json, "r") as f:
+    if args.study_meta_json:
+        with open(args.study_meta_json, "r") as f:
             columns["studies"] = json.load(f)
     else:
         columns["studies"] = {}
@@ -92,7 +97,7 @@ def run():
     parser.add_argument("--link_col_suffix", action="store", type=str, default="_link", help="Suffix for the column name containing the sumstat URI. (Default: '_link')")
     parser.add_argument("--n_cases_col_suffix", action="store", type=str, default="_n_cases", help="Suffix for the column name containing the number of cases. (Default: '_n_cases')")
     parser.add_argument("--n_controls_col_suffix", action="store", type=str, default="_n_controls", help="Suffix for the column name containing the number of controls. (Default: '_n_controls')")
-    parser.add_argument("--study_cols_json", action="store", type=str, help="JSON file containing the column names in sumstat files per study")
+    parser.add_argument("--study_meta_json", action="store", type=str, help="JSON file (keyed by study name) with per-study sumstat column names and optionally 'cohort'/'population' grouping metadata passed through to the configs")
     parser.add_argument("--continuous", action="store_true", help="Phenotypes are continuous (assume number of controls equals 0)")
     parser.add_argument("--min_studies", action="store", type=int, default=2, help="Minimum number of studies required for a phenotype to be included in the meta-analysis. (Default: 2)")
     parser.add_argument("--complete", action="store_true", help="Only include phenotypes with all studies present")
