@@ -317,7 +317,7 @@ task plots {
     runtime {
         docker: "~{docker}"
         cpu: 2
-        memory: "26 GB"
+        memory: "32 GB"
         bootDiskSizeGb: 30
         disks: "local-disk " + 10*ceil(size(meta_file, "G")) + " HDD"
         zones: "europe-west1-b europe-west1-c europe-west1-d"
