@@ -23,7 +23,9 @@ workflow liftover {
                 chr_col = chr_col,
                 pos_col = pos_col,
                 ref_col = ref_col,
-                alt_col = alt_col
+                alt_col = alt_col,
+                af_col = af_col,
+                beta_col = beta_col
         }
         call lift {
             input:
@@ -58,6 +60,8 @@ task sumstat_to_vcf {
         String pos_col
         String ref_col
         String alt_col
+        String? af_col
+        String? beta_col
 
         String docker
 
@@ -74,6 +78,7 @@ task sumstat_to_vcf {
 
         from datetime import date
         import gzip
+        import sys
         from collections import defaultdict
         from contextlib import contextmanager
 
@@ -99,10 +104,37 @@ task sumstat_to_vcf {
 
         sumstat = "~{sumstat_file}"
         delim = "~{delim}"
-        chr_col = "~{chr_col}"
-        pos_col = "~{pos_col}"
+        chr_col = "~{chr_col}".lstrip('#')
+        pos_col = "~{pos_col}".lstrip('#')
         ref_col = "~{ref_col}"
         alt_col = "~{alt_col}"
+        af_col_str = ~{if defined(af_col) then "'~{af_col}'" else "None"}
+        beta_col_str = ~{if defined(beta_col) then "'~{beta_col}'" else "None"}
+
+        # Parse comma-separated lists of columns for allele frequency and beta values, if provided
+        af_cols = [col.strip() for col in af_col_str.split(',')] if af_col_str is not None else []
+        beta_cols = [col.strip() for col in beta_col_str.split(',')] if beta_col_str is not None else []
+
+        with uopen(sumstat, 'rt') as f:
+            sumstat_header = f.readline().strip().split(delim)
+            # Remove leading '#' from first column if present, for consistent lookups
+            if sumstat_header and sumstat_header[0].startswith('#'):
+                sumstat_header[0] = sumstat_header[0].lstrip('#')
+            header_set = set(sumstat_header)
+
+            # Validate that every required input column exists in the sumstat header
+            required_cols = [chr_col, pos_col, ref_col, alt_col] + af_cols + beta_cols
+            missing_cols = [c for c in required_cols if c not in header_set]
+            if missing_cols:
+                sys.stderr.write(
+                    'ERROR: the following input columns were not found in the sumstat header of ' + sumstat + ':\n'
+                    + '  missing: ' + ', '.join(missing_cols) + '\n'
+                    + '  available: ' + ', '.join(sumstat_header) + '\n'
+                )
+                sys.exit(1)
+
+            h_idx = {h:i for i,h in enumerate(sumstat_header)}
+            h_idx = defaultdict(lambda: 1e9, h_idx)
 
         print('##fileformat=VCFv4.0')
 
@@ -113,8 +145,7 @@ task sumstat_to_vcf {
         print('\t'.join(header_line))
 
         with uopen(sumstat, 'rt') as f:
-            h_idx = {h:i for i,h in enumerate(f.readline().strip().split(delim))}
-            h_idx = defaultdict(lambda: 1e9, h_idx)
+            f.readline()  # skip header (already validated above)
 
             for line in f:
                 s = line.strip().split(delim)
