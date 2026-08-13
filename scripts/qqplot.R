@@ -51,7 +51,13 @@ pcols <- unlist(strsplit(opt$options$pval_col, ","))
 file <- opt$options$file
 print(paste("reading file:", file))
 
-data <- fread(file, header = TRUE, select = c(pcols, c(bp_col, chr_col)))
+# When a minrep column is given, BP and CHR are derived from it below and need
+# not exist in the input; select the minrep column instead of bp/chr.
+if (! is.null(opt$options$minrep_col)) {
+  data <- fread(file, header = TRUE, select = c(pcols, opt$options$minrep_col))
+} else {
+  data <- fread(file, header = TRUE, select = c(pcols, bp_col, chr_col))
+}
 
 print(summary(data))
 print(summary(data[[chr_col]]))

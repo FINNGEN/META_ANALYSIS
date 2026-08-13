@@ -293,7 +293,7 @@ def main():
     set_group.add_argument("--af-allele", choices=['alt', 'ref'], default='alt', help="Allele described by the frequency in --af-col.")
     set_group.add_argument("--flip-alleles", action='store_true', help="Flip REF/ALT alleles and invert beta/AF.")
     set_group.add_argument("--recalculate-se", action='store_true', help="Recalculate SE from beta and p-value.")
-    set_group.add_argument("--rounding-precision", type=int, default=4, help="Decimal places to round numeric outputs to.")
+    set_group.add_argument("--rounding-precision", type=int, default=6, help="Decimal places to round numeric outputs to.")
     
     set_group.add_argument("--filt-col", help="Name of the column to use for filtering.")
     set_group.add_argument("--filt-threshold", type=float, help="Rows with a value in --filt-col LESS than or EQUAL to this are removed.")

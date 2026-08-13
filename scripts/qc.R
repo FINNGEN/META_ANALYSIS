@@ -101,19 +101,32 @@ keep_cols <- c(chr_col, bp_col, ref_col, alt_col, af_cols,
                study_beta_cols, meta_beta_col,
                het_p_col)
 
-if (weighted) {
-  study_sebeta_cols <- sapply(conf$meta, function(x) paste(x$name, x$se, sep = "_"))
-  meta_sebeta_col <- paste("all", method, "meta_sebeta", sep = "_")
-  keep_cols <- c(keep_cols, study_sebeta_cols, meta_sebeta_col)
-}
+# SE columns are needed for forest plots and beta-vs-beta fits regardless of
+# weighting; only the regression weighting itself is gated on `weighted`.
+study_sebeta_cols <- sapply(conf$meta, function(x) paste(x$name, x$se, sep = "_"))
+meta_sebeta_col <- paste("all", method, "meta_sebeta", sep = "_")
+keep_cols <- c(keep_cols, study_sebeta_cols, meta_sebeta_col)
 
 if (leave) {
-  leave_pval_cols <- paste("leave", studies, method, "meta_p", sep = "_")
-  leave_beta_cols <- paste("leave", studies, method, "meta_beta", sep = "_")
+  # Only keep per-study leave-one-out columns that actually exist in the file.
+  # The --loo flag may be set whenever any "leave_" column is present (incl.
+  # leave-one-cohort-out / leave-one-population-out columns), so the per-study
+  # columns are not guaranteed to exist; intersect with the header to be safe.
+  file_hdr <- names(fread(file, header = T, nrows = 0))
+  leave_pval_cols <- intersect(paste("leave", studies, method, "meta_p", sep = "_"), file_hdr)
+  leave_beta_cols <- intersect(paste("leave", studies, method, "meta_beta", sep = "_"), file_hdr)
+  leave_sebeta_cols <- intersect(paste("leave", studies, method, "meta_sebeta", sep = "_"), file_hdr)
   #leave_het_p_cols <- paste("leave", studies, method, "meta_het_p", sep = "_")
-  keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols)
-  pval_cols <- c(pval_cols, leave_pval_cols)
-  meta_pval_cols <- c(meta_pval_cols, leave_pval_cols)
+  if (length(leave_pval_cols) == 0) {
+    # --loo may have been set by leave-one-cohort/population-out columns alone;
+    # there are no per-study leave-one-out columns to plot, so skip LOO QC.
+    message("Skipping leave-one-out plotting as no per-study leave_*_meta_p columns are present")
+    leave <- F
+  } else {
+    keep_cols <- c(keep_cols, leave_pval_cols, leave_beta_cols, leave_sebeta_cols)
+    pval_cols <- c(pval_cols, leave_pval_cols)
+    meta_pval_cols <- c(meta_pval_cols, leave_pval_cols)
+  }
 }
 
 message("Reading file ", file, " ...")
@@ -132,7 +145,7 @@ for (pval_thresh_i in pval_thresh) {
   
   message("Calculating qc metrics with p-value threshold ", pval_thresh_i, " ...")
   
-  output_prefix <- paste0(ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out), ".qc.", pval_thresh_i)
+  output_prefix <- paste(ifelse(test = is.null(opt$options$out), yes = file, no = opt$options$out), pval_thresh_i, sep = ".")
   
   qc_dt_i <- copy(qc_dt)
   
@@ -184,7 +197,7 @@ for (pval_thresh_i in pval_thresh) {
   rm(tempdata)
   
   # Use first study / meta-study in list as reference for hits
-  ref_hits <- sig_loc_list[[c(with_more_than1_hit, study_pval_cols[1])[1]]]
+  ref_hits <- copy(sig_loc_list[[c(with_more_than1_hit, study_pval_cols[1])[1]]])
   ref_study <- studies[1]
   ref_beta_col <- study_beta_cols[startsWith(study_beta_cols, prefix = ref_study)]
   ref_sebeta_col <- study_sebeta_cols[startsWith(study_sebeta_cols, prefix = ref_study)]
@@ -242,20 +255,96 @@ for (pval_thresh_i in pval_thresh) {
     }
   )
   
-  fwrite(qc_dt_i, paste0(output_prefix, ".tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+  fwrite(qc_dt_i, paste0(output_prefix, ".qc.tsv"), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
   
-  # Don't try plotting if less than two significant SNPs
+  # Don't try plotting if no significant SNPs
   if (is.null(ref_hits)) {
     message("Skipping plotting due to no significant hits.")
     next
   }
   
   for (h in names(sig_loc_list)) {
-    fwrite(sig_loc_list[[h]], paste(output_prefix, h, "hits", sep = "."), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
+    fwrite(sig_loc_list[[h]], paste(output_prefix, h, "qc.hits", sep = "."), col.names = T, row.names = F, quote = F, sep = "\t", na = "NA")
   }
   
+  # Create forest plots for all unique significant hits
+  unique_variants <- unique(rbindlist(sig_loc_list))
+  unique_variants <- unique_variants[order(unique_variants[[chr_col]], unique_variants[[bp_col]]), ]
+  
+  # Prepare all beta and sebeta columns to plot
+  beta_cols_to_plot <- c(study_beta_cols, meta_beta_col)
+  sebeta_cols_to_plot <- c(study_sebeta_cols, meta_sebeta_col)
+  p_cols_to_plot <- c(study_pval_cols, meta_pval_col)
+  study_labels <- c(studies, "META")
+  
+  if (leave) {
+    beta_cols_to_plot <- c(beta_cols_to_plot, leave_beta_cols)
+    sebeta_cols_to_plot <- c(sebeta_cols_to_plot, leave_sebeta_cols)
+    p_cols_to_plot <- c(p_cols_to_plot, leave_pval_cols)
+    study_labels <- c(study_labels, paste("leave", studies, sep = "_"))
+  }
+  
+  # Open PDF and create forest plots
+  pdf(paste0(output_prefix, ".forest_plots.pdf"), width = 8, height = 6)
+  for (i in 1:nrow(unique_variants)) {
+    variant <- unique_variants[i, ]
+    variant_id <- paste(variant[[chr_col]], variant[[bp_col]], variant[[ref_col]], variant[[alt_col]], sep = ":")
+    
+    # Extract betas and standard errors for this hit
+    plot_data <- data.table(
+      study = study_labels,
+      beta = as.numeric(variant[, ..beta_cols_to_plot]),
+      sebeta = as.numeric(variant[, ..sebeta_cols_to_plot]),
+      pval = as.numeric(variant[, ..p_cols_to_plot])
+    )
+    
+    # Remove rows with missing data
+    plot_data <- na.omit(plot_data)
+    
+    # Reorder study factor to place META at the bottom
+    if ("META" %in% plot_data$study) {
+      other_studies <- setdiff(plot_data$study, "META")
+      plot_data[, study := factor(study, levels = c("META", other_studies))]
+    }
+    
+    # Calculate confidence intervals
+    plot_data[, lower := beta - 1.96 * sebeta]
+    plot_data[, upper := beta + 1.96 * sebeta]
+    
+    # Format p-values for display
+    plot_data[, pval_label := ifelse(pval < 1e-300, "< 1e-300", 
+                       ifelse(pval < 0.001, format(pval, scientific = TRUE, digits = 2),
+                          format(pval, digits = 3)))]
+    
+    # Calculate x position for p-value labels and axis limits
+    x_min <- min(plot_data$lower, na.rm = TRUE)
+    x_max <- max(plot_data$upper, na.rm = TRUE)
+    x_range <- x_max - x_min
+    text_x <- x_max + x_range * 0.15
+    x_limit <- x_max + x_range * 0.35
+    
+    # Create and print forest plot
+    p <- ggplot(plot_data, aes(x = beta, y = study)) +
+      geom_point(size = 3) +
+      geom_errorbarh(aes(xmin = lower, xmax = upper), height = 0.2) +
+      geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+      geom_text(aes(label = pval_label), x = text_x, hjust = 0, size = 3) +
+      scale_x_continuous(limits = c(x_min - x_range * 0.05, x_limit)) +
+      labs(title = variant_id, x = "Beta", y = "Study") +
+      coord_cartesian(clip = "off") +
+      theme_bw() +
+      theme(axis.title = element_text(size = 10),
+        axis.text = element_text(size = 9),
+        plot.title = element_text(size = 11, face = "bold"),
+        plot.margin = margin(r = 100))
+    
+    print(p)
+  }
+  dev.off()
+  message("Saved ", nrow(unique_variants), " forest plots to ", paste0(output_prefix, ".forest_plots.pdf"))
+  
   if (nrow(ref_hits) < 2) {
-    message("Skipping plotting due to less than 2 significant hits.")
+    message("Skipping QC plots due to less than 2 significant hits.")
     next
   }
   
@@ -390,7 +479,7 @@ for (pval_thresh_i in pval_thresh) {
     theme(axis.title = element_text(size = 7),
           axis.text = element_text(size = 7))
 
-  ggsave(filename = paste0(output_prefix, ".pdf"),
+  ggsave(filename = paste0(output_prefix, ".qc.pdf"),
          plot = plots_arranged,
          device = "pdf",
          dpi = 300,

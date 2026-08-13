@@ -428,7 +428,7 @@ usage: create_meta_confs.py [-h] [--studies STUDIES [STUDIES ...]]
                             [--required_studies REQUIRED_STUDIES [REQUIRED_STUDIES ...]]
                             [--complete] [--continuous]
                             [--bucket BUCKET]
-                            [--study_cols_json STUDY_COLS_JSON]
+                            [--study_meta_json STUDY_META_JSON]
                             in_mapping_file sumstat_filelist_name
                             json_filelist_name
 
@@ -450,8 +450,10 @@ optional arguments:
   --complete            Only include phenotypes with all studies present
   --continuous          Treat phenotypes as continuous (n_controls = 0)
   --bucket BUCKET       GCS bucket to upload files to
-  --study_cols_json STUDY_COLS_JSON
-                        JSON file specifying study column mappings
+  --study_meta_json STUDY_META_JSON
+                        JSON file (keyed by study name) with per-study sumstat
+                        column mappings, and optionally 'cohort'/'population'
+                        grouping metadata
 ```
 
 The script reads a mapping file where each row represents a phenotype and columns contain study-specific information (file paths, sample sizes, column names). It generates:
@@ -459,6 +461,13 @@ The script reads a mapping file where each row represents a phenotype and column
 * Individual JSON configuration files for each phenotype in `jsons/` directory
 * A file listing all summary statistic file paths
 * A file listing all generated JSON configuration paths
+
+The `--study_meta_json` file is keyed by study name. Besides the sumstat column
+names (`chr`, `pos`, `ref`, `alt`, `effect`, `effect_type`, `pval`, optional
+`se`/`extra_cols`), each study entry may include optional `"cohort"` and
+`"population"` fields. When present they are passed through verbatim into the
+generated study configs, enabling `--leave_one_cohort_out` /
+`--leave_one_population_out` in [meta_analysis.py](scripts/meta_analysis.py).
 
 ### Copy Cromwell Outputs
 
@@ -484,19 +493,6 @@ This script identifies and removes columns starting with `leave_` prefix (genera
 ## Docker Image
 
 The project includes a [Dockerfile](docker/Dockerfile) that builds a container image with all required dependencies for running the meta-analysis tools.
-
-```dockerfile
-FROM eu.gcr.io/finngen-refinery-dev/bioinformatics:0.8.2
-
-ADD scripts/*.py /usr/local/bin/
-ADD scripts/*R /usr/local/bin/
-
-RUN chmod a+x /usr/local/bin/*.R && chmod a+x /usr/local/bin/*.py
-
-RUN R -e "install.packages(c('openxlsx'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
-
-WORKDIR /
-```
 
 The Docker image:
 

@@ -3,6 +3,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import numpy as np
+import numpy
 import math
 from scipy.stats import chi2
 from meta_analysis import (
@@ -296,11 +297,11 @@ class TestMetaAnalysis(unittest.TestCase):
 
         # Expected result:
         # For 'n':
-        #   ("0.50", "NA", "0.05", -1.30, "0.05")
+        #   ("0.50", "NA", "0.05", -1.30103, "0.05")  # mlogp now has 6 decimals
         # For 'inv_var':
         #   ("0.40", "0.05", "0.01", -2.00, "0.05")
         expected_result = [
-            ("0.50", "NA", "0.05", -1.30, "0.05"),  # method 'n'
+            ("0.50", "NA", "0.05", -1.30103, "0.05"),  # method 'n'
             ("0.40", "0.05", "0.01", -2.00, "0.05")  # method 'inv_var'
         ]
 
@@ -351,10 +352,10 @@ class TestMetaAnalysis(unittest.TestCase):
             result = do_meta(study_list, methods, is_het_test)
 
         # Expected result:
-        # 'n' method: ("0.50", "NA", "0.05", -1.30, "0.05")
+        # 'n' method: ("0.50", "NA", "0.05", -1.30103, "0.05")  # mlogp now has 6 decimals
         # 'inv_var' method: None
         expected_result = [
-            ("0.50", "NA", "0.05", -1.30, "0.05"),
+            ("0.50", "NA", "0.05", -1.30103, "0.05"),
             None
         ]
 
@@ -478,6 +479,236 @@ class TestMetaAnalysis(unittest.TestCase):
         mock_het_test.assert_any_call([0.5], [10.0], 0.5)
         mock_het_test.assert_any_call([0.5], [20.0], 0.6)
         self.assertEqual(mock_het_test.call_count, 2)
+
+
+class TestMetaAnalysisPrecision(unittest.TestCase):
+    """Test suite for validating numeric precision in meta_analysis.py"""
+
+    def test_format_num_default_precision_is_6(self):
+        """Test 1: Verify format_num default precision is 6"""
+        # Test with a number that has many significant figures
+        result = format_num(0.123456789)
+        
+        # Parse scientific notation to count significant figures
+        # format_num returns scientific notation like "1.234568e-01"
+        self.assertIsNotNone(result)
+        self.assertNotEqual(result, "NA")
+        
+        # Check that it's in scientific notation
+        self.assertIn('e', result.lower())
+        
+        # Extract mantissa (part before 'e')
+        mantissa = result.lower().split('e')[0]
+        # Count significant figures (digits excluding the decimal point)
+        sig_figs = len(mantissa.replace('.', '').replace('-', ''))
+        
+        # Should have 7 digits (1 before decimal + 6 after for precision=6)
+        self.assertEqual(sig_figs, 7, 
+                        f"format_num should produce 6 decimal places in mantissa, got {sig_figs-1}")
+
+    def test_format_num_with_6_precision(self):
+        """Test 2: Verify format_num explicitly with precision=6"""
+        result = format_num(1.23456789e-5, precision=6)
+        
+        # Should be in scientific notation
+        self.assertIn('e', result.lower())
+        
+        # Parse and verify
+        mantissa = result.lower().split('e')[0]
+        sig_figs = len(mantissa.replace('.', '').replace('-', ''))
+        
+        # 7 digits total (1 + 6 decimal places)
+        self.assertEqual(sig_figs, 7,
+                        f"precision=6 should give 7 total digits, got {sig_figs}")
+
+    def test_format_num_very_small_pvalue(self):
+        """Test 3: Verify p-value formatting with high precision"""
+        result = format_num(1.23456789e-50, precision=6)
+        
+        self.assertIsNotNone(result)
+        self.assertIn('e', result.lower())
+        
+        # Extract and verify mantissa has correct precision
+        parts = result.lower().split('e')
+        mantissa = parts[0]
+        exponent = int(parts[1])
+        
+        # Verify exponent is correct magnitude
+        self.assertLess(exponent, -40, "Very small p-value should have large negative exponent")
+        
+        # Verify mantissa precision
+        if '.' in mantissa:
+            decimal_part = mantissa.split('.')[1]
+            self.assertEqual(len(decimal_part), 6,
+                           f"Mantissa should have 6 decimal places, got {len(decimal_part)}")
+
+    def test_format_num_handles_none(self):
+        """Test 4: Verify format_num returns 'NA' for None"""
+        result = format_num(None)
+        self.assertEqual(result, "NA", "format_num should return 'NA' for None input")
+
+    def test_format_num_handles_nan(self):
+        """Test 5: Verify format_num returns 'NA' for NaN"""
+        result = format_num(numpy.nan)
+        self.assertEqual(result, "NA", "format_num should return 'NA' for NaN input")
+
+    def test_do_meta_mlogp_precision(self):
+        """Test 6: Verify -log10(p) in meta results has 6 decimals"""
+        # Create mock study and variant data
+        study = MagicMock(spec=Study)
+        variant = MagicMock(spec=VariantData)
+        
+        study.effective_size = 100
+        variant.beta = 0.5
+        variant.pval = 0.001
+        variant.se = 0.1
+        variant.z_score = 1.96
+        
+        study_list = [(study, variant)]
+        methods = ['inv_var']
+        
+        result = do_meta(study_list, methods, is_het_test=False)
+        
+        # Result should be a list with one tuple
+        self.assertEqual(len(result), 1)
+        self.assertIsNotNone(result[0])
+        
+        # Fourth element is mlogp (rounded)
+        mlogp = result[0][3]
+        
+        # Should be a numpy float rounded to 6 decimals
+        self.assertIsInstance(mlogp, (float, numpy.floating))
+        
+        # Convert to string and check decimal places
+        mlogp_str = f"{mlogp:.10f}"  # Format with extra precision to see what we have
+        if '.' in mlogp_str:
+            # Count actual decimal places (excluding trailing zeros)
+            decimal_part = mlogp_str.split('.')[1].rstrip('0')
+            self.assertLessEqual(len(decimal_part), 6,
+                               f"mlogp should have at most 6 decimal places, got {len(decimal_part)}")
+
+    def test_do_meta_beta_precision(self):
+        """Test 7: Verify beta in meta results has 6 significant figures"""
+        study = MagicMock(spec=Study)
+        variant = MagicMock(spec=VariantData)
+        
+        study.effective_size = 100
+        variant.beta = 0.123456789  # More precision than we want to keep
+        variant.pval = 0.001
+        variant.se = 0.05
+        variant.z_score = 2.58
+        
+        study_list = [(study, variant)]
+        methods = ['inv_var']
+        
+        result = do_meta(study_list, methods, is_het_test=False)
+        
+        self.assertIsNotNone(result[0])
+        
+        # First element is beta (formatted)
+        beta_formatted = result[0][0]
+        
+        # Should be in scientific notation or have limited precision
+        self.assertIsInstance(beta_formatted, str)
+        self.assertNotEqual(beta_formatted, "NA")
+        
+        # If scientific notation, check mantissa precision
+        if 'e' in beta_formatted.lower():
+            mantissa = beta_formatted.lower().split('e')[0]
+            if '.' in mantissa:
+                decimal_part = mantissa.split('.')[1]
+                self.assertEqual(len(decimal_part), 6,
+                               f"Beta mantissa should have 6 decimal places, got {len(decimal_part)}")
+
+    def test_do_meta_se_precision(self):
+        """Test 8: Verify standard error in meta results has 6 significant figures"""
+        study = MagicMock(spec=Study)
+        variant = MagicMock(spec=VariantData)
+        
+        study.effective_size = 100
+        variant.beta = 0.5
+        variant.pval = 0.001
+        variant.se = 0.0987654321  # More precision than we want
+        variant.z_score = 2.58
+        
+        study_list = [(study, variant)]
+        methods = ['inv_var']
+        
+        result = do_meta(study_list, methods, is_het_test=False)
+        
+        self.assertIsNotNone(result[0])
+        
+        # Second element is SE (formatted)
+        se_formatted = result[0][1]
+        
+        self.assertIsInstance(se_formatted, str)
+        self.assertNotEqual(se_formatted, "NA")
+        
+        # Check precision in scientific notation
+        if 'e' in se_formatted.lower():
+            mantissa = se_formatted.lower().split('e')[0]
+            if '.' in mantissa:
+                decimal_part = mantissa.split('.')[1]
+                self.assertEqual(len(decimal_part), 6,
+                               f"SE mantissa should have 6 decimal places, got {len(decimal_part)}")
+
+    def test_numpy_round_precision_6(self):
+        """Test 9: Verify numpy.round with 6 decimals works correctly"""
+        # Test the rounding that's used for mlogp in do_meta
+        test_values = [
+            (10.123456789, 10.123457),
+            (5.555555555, 5.555556),
+            (0.000001234, 0.000001),
+            (99.999999999, 100.0)
+        ]
+        
+        for input_val, expected in test_values:
+            rounded = numpy.round(input_val, 6)
+            self.assertAlmostEqual(rounded, expected, places=6,
+                                  msg=f"numpy.round({input_val}, 6) should equal {expected}")
+
+    def test_inv_var_meta_precision(self):
+        """Test 10: Verify inverse variance meta maintains precision"""
+        study1 = MagicMock(spec=Study)
+        variant1 = MagicMock(spec=VariantData)
+        study1.name = "Study1"
+        study1.effective_size = 100
+        variant1.beta = 0.123456
+        variant1.pval = 0.001
+        variant1.se = 0.05
+        variant1.z_score = 2.58
+        
+        study2 = MagicMock(spec=Study)
+        variant2 = MagicMock(spec=VariantData)
+        study2.name = "Study2"
+        study2.effective_size = 200
+        variant2.beta = 0.234567
+        variant2.pval = 0.0001
+        variant2.se = 0.04
+        variant2.z_score = 3.29
+        
+        study_list = [(study1, variant1), (study2, variant2)]
+        
+        # Call inv_var_meta directly
+        result = inv_var_meta(study_list)
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 6)  # Should return tuple of 6 elements
+        
+        # Check that beta_meta (first element) is a float
+        beta_meta = result[0]
+        self.assertIsInstance(beta_meta, float)
+        
+        # Check that SE (second element) is a float
+        se_meta = result[1]
+        self.assertIsInstance(se_meta, float)
+        
+        # Check that p-value (third element) is a float
+        pval_meta = result[2]
+        self.assertIsInstance(pval_meta, float)
+        self.assertGreater(pval_meta, 0)
+        self.assertLessEqual(pval_meta, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

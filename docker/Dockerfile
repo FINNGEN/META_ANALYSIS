@@ -5,6 +5,12 @@ ADD scripts/*R /usr/local/bin/
 
 RUN chmod a+x /usr/local/bin/*.R && chmod a+x /usr/local/bin/*.py
 
-RUN R -e "install.packages(c('openxlsx'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
+COPY docker/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY docker/install_packages.R /tmp/install_packages.R
+RUN Rscript /tmp/install_packages.R
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 WORKDIR /

@@ -386,6 +386,11 @@ class Study:
         else:
              self.conf["extra_cols"] = []
 
+        # Optional grouping metadata (not data columns). If absent the study is
+        # never enumerated as a group and is never left out in grouped LOO.
+        for f in ("cohort", "population"):
+            self.conf[f] = str(self.conf[f]) if f in self.conf else None
+
 
 
     @property
@@ -405,6 +410,14 @@ class Study:
     @property
     def name(self):
         return self.conf["name"]
+
+    @property
+    def cohort(self):
+        return self.conf["cohort"]
+
+    @property
+    def population(self):
+        return self.conf["population"]
 
     def has_std_err(self):
         return "se" in self.conf
@@ -552,7 +565,7 @@ def get_studies(conf:str, chrom, sep, flip_indels) -> List[Study]:
 
     return [ Study(s, chrom, sep, flip_indels) for s in studies_conf["meta"]]
 
-def format_num(num, precision=2):
+def format_num(num, precision=6):
     return "NA" if num is None or numpy.isnan(num) else numpy.format_float_scientific(num, precision=precision)
 
 def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is_het_test) -> List[Tuple] :
@@ -571,9 +584,9 @@ def do_meta(study_list: List[ Tuple[Study, VariantData]], methods: List[str], is
     for m in met:
         if m is not None:
             if is_het_test:
-                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2), format_num(het_test(m[4], m[5], m[0]))))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 6), format_num(het_test(m[4], m[5], m[0]))))
             else:
-                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 2)))
+                meta_res.append((format_num(m[0]), format_num(m[1]), format_num(m[2]), numpy.round(m[3], 6)))
         else:
             meta_res.append(None)
 
@@ -648,6 +661,59 @@ def validate_methods(methods, studies):
         M.append(m)
     return M
 
+def ordered_groups(studs, attr):
+    '''
+        Distinct non-missing values of the given Study attribute (e.g. "cohort"
+        or "population"), in order of first appearance in the configuration.
+        Studies where the attribute is None are skipped, so they are never
+        enumerated as a group and never left out.
+    '''
+    seen, out = set(), []
+    for s in studs:
+        g = getattr(s, attr)
+        if g is not None and g not in seen:
+            seen.add(g)
+            out.append(g)
+    return out
+
+def loo_studies(next_var, studs, attr, group_value):
+    '''
+        (study, variant) pairs for the current variant with the given group
+        dropped. Studies whose attribute is None are always retained.
+    '''
+    return [(studs[i], var) for i, var in enumerate(next_var)
+            if var is not None and getattr(studs[i], attr) != group_value]
+
+def loo_label(value):
+    '''Sanitize a group value for safe use in a tab-separated column name.'''
+    return str(value).replace(" ", "_")
+
+def loo_header_cols(label, methods, is_het_test):
+    '''Column names for one leave-out block (one study or one group).'''
+    cols = [f"leave_{label}_N"]
+    for m in methods:
+        cols.extend([
+            f"leave_{label}_{m}_meta_beta",
+            f"leave_{label}_{m}_meta_sebeta",
+            f"leave_{label}_{m}_meta_p",
+            f"leave_{label}_{m}_meta_mlogp"
+        ])
+        if is_het_test:
+            cols.append(f"leave_{label}_{m}_meta_het_p")
+    return cols
+
+def emit_loo_block(outdat, matching, methods, is_het_test, n_meta_cols):
+    '''Append the N-count and per-method meta results for one leave-out set.'''
+    outdat.append(str(len(matching)))
+    if matching:
+        for m in do_meta(matching, methods=methods, is_het_test=is_het_test):
+            if m is not None:
+                outdat.extend(m)
+            else:
+                outdat.extend(['NA'] * n_meta_cols)
+    else:
+        outdat.extend(['NA'] * n_meta_cols * len(methods))
+
 def run():
     '''
         First parameter should be a path to a json configuration file with these elements:
@@ -673,6 +739,8 @@ def run():
 
     parser.add_argument('--not_quiet', action='store_false', dest='quiet', help='Print matching variants to stdout')
     parser.add_argument('--leave_one_out', action='store_true', help='Do leave-one-out meta-analysis')
+    parser.add_argument('--leave_one_cohort_out', action='store_true', help='Do leave-one-cohort-out meta-analysis using the optional "cohort" config field. Studies without a cohort are always retained.')
+    parser.add_argument('--leave_one_population_out', action='store_true', help='Do leave-one-population-out meta-analysis using the optional "population" config field. Studies without a population are always retained.')
     parser.add_argument('--is_het_test', action='store_true', help='Do heterogeneity tests based on Cochrans Q and output het_p')
     parser.add_argument('--pairwise_with_first', action='store_true', help='Do pairwise meta-analysis with the first given study')
     parser.add_argument('--sep', default='\t', action='store', help='Input file field separator (Default: "\\t")')
@@ -687,6 +755,16 @@ def run():
     if len(studs) < 3 and args.leave_one_out:
         print("Skipping leave-one-out meta-analysis as there are less than 3 studies", file=sys.stderr)
         args.leave_one_out = False
+
+    cohort_groups = ordered_groups(studs, "cohort") if args.leave_one_cohort_out else []
+    if args.leave_one_cohort_out and len(cohort_groups) < 1:
+        print("Skipping leave-one-cohort-out meta-analysis as no studies define a 'cohort'", file=sys.stderr)
+        args.leave_one_cohort_out = False
+
+    pop_groups = ordered_groups(studs, "population") if args.leave_one_population_out else []
+    if args.leave_one_population_out and len(pop_groups) < 1:
+        print("Skipping leave-one-population-out meta-analysis as no studies define a 'population'", file=sys.stderr)
+        args.leave_one_population_out = False
 
     outfile = args.path_to_res
     n_meta_cols = 5 if args.is_het_test else 4
@@ -709,19 +787,20 @@ def run():
         if args.is_het_test:
             header.append(f"all_{m}_het_p")
     
-    # Leave-one-out meta-analysis columns
+    # Leave-one-out meta-analysis columns (per study)
     if args.leave_one_out:
         for s in studs:
-            header.append(f"leave_{s.name}_N")
-            for m in methods:
-                header.extend([
-                    f"leave_{s.name}_{m}_meta_beta",
-                    f"leave_{s.name}_{m}_meta_sebeta",
-                    f"leave_{s.name}_{m}_meta_p",
-                    f"leave_{s.name}_{m}_meta_mlogp"
-                ])
-                if args.is_het_test:
-                    header.append(f"leave_{s.name}_{m}_meta_het_p")
+            header.extend(loo_header_cols(s.name, methods, args.is_het_test))
+
+    # Leave-one-cohort-out columns (one block per distinct cohort)
+    if args.leave_one_cohort_out:
+        for g in cohort_groups:
+            header.extend(loo_header_cols(f"cohort_{loo_label(g)}", methods, args.is_het_test))
+
+    # Leave-one-population-out columns (one block per distinct population)
+    if args.leave_one_population_out:
+        for g in pop_groups:
+            header.extend(loo_header_cols(f"population_{loo_label(g)}", methods, args.is_het_test))
 
     with open(outfile, 'w') as out:
 
@@ -769,19 +848,21 @@ def run():
                 else:
                     outdat.extend(['NA'] * n_meta_cols)
 
+            # Leave-one-out: drop each study by index
             if args.leave_one_out:
                 for s,_ in enumerate(studs):
                     matching_studies_loo = [(studs[i], var) for i,var in enumerate(next_var) if s != i and var is not None]
-                    outdat.append( str(len(matching_studies_loo)) )
-                    if matching_studies_loo:
-                        met = do_meta( matching_studies_loo, methods=methods, is_het_test=args.is_het_test )
-                        for m in met:
-                            if m is not None:
-                                outdat.extend(m)
-                            else:
-                                outdat.extend(['NA'] * n_meta_cols)
-                    else:
-                        outdat.extend(['NA'] * n_meta_cols * len(methods))
+                    emit_loo_block(outdat, matching_studies_loo, methods, args.is_het_test, n_meta_cols)
+
+            # Leave-one-cohort-out: drop all studies sharing a cohort value
+            if args.leave_one_cohort_out:
+                for g in cohort_groups:
+                    emit_loo_block(outdat, loo_studies(next_var, studs, "cohort", g), methods, args.is_het_test, n_meta_cols)
+
+            # Leave-one-population-out: drop all studies sharing a population value
+            if args.leave_one_population_out:
+                for g in pop_groups:
+                    emit_loo_block(outdat, loo_studies(next_var, studs, "population", g), methods, args.is_het_test, n_meta_cols)
 
             out.write("\t".join(map(str, outdat)) + "\n")
 
