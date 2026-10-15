@@ -42,7 +42,8 @@ workflow munge {
         call harmonize {
             input:
                 sumstat_file = select_first([lift_postprocess.lifted_variants, clean_filter.out]),
-                docker = meta_docker
+                docker = meta_docker,
+                liftover = liftover
         }
         
         call filt {
@@ -400,6 +401,7 @@ task harmonize {
         String docker
         File gnomad_ref
         String options
+        Boolean liftover
     }
 
     String base = basename(sumstat_file, ".tsv.gz")
@@ -418,7 +420,7 @@ task harmonize {
         mv ~{gnomad_ref} ~{gnomad_ref_base}
 
         echo "`date` harmonizing stats with gnomAD"
-        harmonize.py ~{base} ~{gnomad_ref_base} ~{options} | bgzip > ~{base}.~{gnomad_ref_base}
+        harmonize.py ~{base} ~{gnomad_ref_base} ~{if liftover then options + " --pre_aligned" else options} | bgzip > ~{base}.~{gnomad_ref_base}
         
         tabix -s 1 -b 2 -e 2 ~{base}.~{gnomad_ref_base}
         echo "`date` done"
